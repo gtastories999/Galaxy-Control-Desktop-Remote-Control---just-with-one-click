@@ -86,8 +86,8 @@ internal sealed class MainWindow : Form {
             using var deadline=CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);deadline.CancelAfter(TimeSpan.FromSeconds(15));
             await socket.ConnectAsync(uri.Uri,deadline.Token);
             await Receive(lifetime.Token);
-        } catch(Exception e) when(e is WebSocketException or OperationCanceledException or IOException or JsonException or InvalidOperationException or UriFormatException or System.Runtime.InteropServices.ExternalException or ArgumentException) {status.Text=e is InvalidOperationException?e.Message:"Connection ended or unavailable. Check the relay and technician details.";}
-        finally {busy=false;Disconnect(false);}
+        } catch(Exception e) when(e is WebSocketException or OperationCanceledException or IOException or JsonException or InvalidOperationException or FormatException or KeyNotFoundException or System.Runtime.InteropServices.ExternalException or ArgumentException) {status.Text=e is InvalidOperationException?e.Message:"Connection ended or unavailable. Check the relay and technician details.";}
+        finally {if(active)status.Text="Session ended. Your computer is no longer shared.";busy=false;Disconnect(false);}
     }
     async Task Receive(CancellationToken ct) {
         var buffer=new byte[2*1024*1024];
@@ -106,7 +106,7 @@ internal sealed class MainWindow : Form {
             if(type=="error")return;
             if(type=="request"){accept.Visible=true;accept.Enabled=true;}
             if(type=="connected") {
-                active=true;accept.Visible=false;BackColor=Color.FromArgb(255,247,218);
+                active=true;TopMost=!technician;accept.Visible=false;BackColor=Color.FromArgb(255,247,218);
                 if(technician) OpenViewer(); else _=CaptureScreen(ct);
             }
         }
@@ -134,7 +134,7 @@ internal sealed class MainWindow : Form {
         }catch(Exception e) when(e is OperationCanceledException or WebSocketException or System.Runtime.InteropServices.ExternalException or IOException){Disconnect();}
     }
     void Disconnect(bool updateStatus=true) {
-        active=false;lifetime?.Cancel();socket?.Abort();socket?.Dispose();socket=null;
+        active=false;TopMost=false;lifetime?.Cancel();socket?.Abort();socket?.Dispose();socket=null;
         NativeInput.ReleaseAll();
         var old=viewer;viewer=null;if(old is not null){old.Controls.Remove(screen);old.Close();old.Dispose();}
         screen.Image?.Dispose();screen.Image=null;

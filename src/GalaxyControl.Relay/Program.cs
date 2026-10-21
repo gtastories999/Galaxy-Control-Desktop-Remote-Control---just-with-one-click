@@ -16,6 +16,9 @@ var sessions = new ConcurrentDictionary<string, Session>(StringComparer.OrdinalI
 var credentials = JsonSerializer.Deserialize<Dictionary<string,string>>(Environment.GetEnvironmentVariable("GALAXY_TECHNICIANS") ?? "{}")!
     .ToDictionary(p => p.Key.Trim().ToLowerInvariant(), p => p.Value);
 if (credentials.Count == 0) throw new InvalidOperationException("Set GALAXY_TECHNICIANS to an email → SHA-256 token hash JSON object.");
+foreach(var pair in credentials) {
+    if(pair.Value.Length!=64 || !pair.Value.All(Uri.IsHexDigit)) throw new InvalidOperationException("Technician hashes must be SHA-256 hex values.");
+}
 app.UseRateLimiter();
 app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(20) });
 app.MapGet("/health", () => Results.Ok(new { service = "Galaxy Control Relay", status = "ready" }));
@@ -78,7 +81,7 @@ app.Map("/connect", async context => {
             } else if (role != "host" || !current.Active) continue;
             await (role == "host" ? current.Technician : current.Host).Send(bytes, part.MessageType, ct);
         }
-    } catch (Exception e) when (e is WebSocketException or OperationCanceledException or JsonException or InvalidDataException or InvalidOperationException) {
+    } catch (Exception e) when (e is WebSocketException or OperationCanceledException or JsonException or InvalidDataException or InvalidOperationException or KeyNotFoundException) {
         app.Logger.LogInformation("Support connection ended: {Reason}", e.GetType().Name);
     } finally {
         if (role == "technician") ((ICollection<KeyValuePair<string,Peer>>)technicians).Remove(new(email, peer));

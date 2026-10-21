@@ -20,6 +20,17 @@ dotnet run --project src/GalaxyControl.Relay --urls http://127.0.0.1:8080
 
 Place the relay behind an HTTPS reverse proxy with WebSocket support. Set its public `wss://.../connect` endpoint in `src/GalaxyControl/connection.json` **before publishing**. Do not expose the HTTP listener publicly. Configure proxy timeouts for long-lived WebSockets and connection limits. `/health` returns readiness. Unknown technician addresses are rejected. Only one technician connection and one customer session per email are supported. Session lifetime is capped at one hour; technician connection lifetime at two hours. The relay keeps no screen recordings or session content on disk.
 
+## Deploy with automatic HTTPS
+
+On a Linux server with Docker Compose, point a DNS hostname to the server and allow inbound ports 80 and 443. Then run from the repository root:
+
+```bash
+python3 scripts/configure.py support.example.com tech@example.com
+docker compose --env-file deployment/.env -f deployment/compose.yaml up -d --build
+```
+
+Save the generated technician access key privately. The script writes only its hash to the ignored `deployment/.env` and sets the public endpoint in the app's `connection.json`. Caddy obtains and renews the TLS certificate. Publish the Windows app after configuring the endpoint. Only the HTTPS proxy is exposed; the relay stays on the internal Docker network. Hosting, DNS and a two-PC test are still required.
+
 ## Build a portable Windows app
 
 On Windows with .NET 8 SDK:

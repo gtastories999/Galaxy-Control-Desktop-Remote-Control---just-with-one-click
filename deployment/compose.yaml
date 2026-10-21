@@ -1,0 +1,25 @@
+services:
+  relay:
+    build:
+      context: ..
+      dockerfile: src/GalaxyControl.Relay/Dockerfile
+    environment:
+      GALAXY_TECHNICIANS: ${GALAXY_TECHNICIANS:?Run scripts/configure.py first}
+    restart: unless-stopped
+    expose:
+      - "8080"
+  https:
+    image: caddy:2-alpine
+    environment:
+      GALAXY_DOMAIN: ${GALAXY_DOMAIN:?Set a domain}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+volumes:
+  caddy_data:
+  caddy_config:
