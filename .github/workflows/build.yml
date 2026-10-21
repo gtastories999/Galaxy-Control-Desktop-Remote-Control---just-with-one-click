@@ -52,9 +52,37 @@ jobs:
           } else {
             Write-Host 'Using the installed WebView2 Runtime.'
           }
+      - name: Verify and capture actual Windows interface
+        run: dotnet run --project tests/WindowsUi -c Release
+      - name: Upload Windows UI snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Galaxy-Control-Windows-UI
+          path: artifacts/ui/
       - name: Test actual Windows WebView2 peer transport
         run: dotnet run --project tests/WindowsTransport -c Release
       - uses: actions/upload-artifact@v4
         with:
           name: Galaxy-Control-P2P-Windows-x64
           path: artifacts/windows/
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [windows, supabase-and-p2p]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Galaxy-Control-P2P-Windows-x64
+          path: windows
+      - name: Package public Windows download
+        run: cd windows && zip -r ../Galaxy-Control-Windows-x64.zip .
+      - name: Publish direct Windows download
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create "windows-${{ github.run_number }}" Galaxy-Control-Windows-x64.zip --target "${{ github.sha }}" --title "Galaxy Control - Windows UI fixes" --notes "Fixes the missing role selector and square button backgrounds. Includes a rendered 3D gold logo, rounded input fields and role-specific help text. Windows UI snapshots, WebView2 P2P transport, directory and database tests pass before publication. This public build contains configuration placeholders: retain your existing connection.json when updating, or configure your own Supabase project using the repository guide." --latest

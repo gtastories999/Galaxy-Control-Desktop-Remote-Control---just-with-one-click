@@ -9,6 +9,7 @@ internal class RoundedButton : Button {
     public bool Gold { get; set; }
     public RoundedButton() {
         FlatStyle=FlatStyle.Flat; FlatAppearance.BorderSize=0; Cursor=Cursors.Hand;
+        UseVisualStyleBackColor=false; BackColor=Color.White;
         Font=new Font("Segoe UI",10,FontStyle.Bold);
         SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer,true);
     }
@@ -16,6 +17,15 @@ internal class RoundedButton : Button {
         var p=new GraphicsPath();float d=radius*2;
         p.AddArc(r.X,r.Y,d,d,180,90);p.AddArc(r.Right-d,r.Y,d,d,270,90);
         p.AddArc(r.Right-d,r.Bottom-d,d,d,0,90);p.AddArc(r.X,r.Bottom-d,d,d,90,90);p.CloseFigure();return p;
+    }
+    protected override void OnResize(EventArgs e) {
+        base.OnResize(e);
+        if(Width<4||Height<4)return;
+        using var outline=Shape(new RectangleF(0,0,Width,Height),Math.Min(14,Height/2f));
+        var previous=Region;Region=new Region(outline);previous?.Dispose();
+    }
+    protected override void OnPaintBackground(PaintEventArgs e) {
+        e.Graphics.Clear(Parent?.BackColor??Color.White);
     }
     protected override void OnMouseEnter(EventArgs e){Hovered=true;Invalidate();base.OnMouseEnter(e);}
     protected override void OnMouseLeave(EventArgs e){Hovered=false;Invalidate();base.OnMouseLeave(e);}
@@ -32,7 +42,8 @@ internal class RoundedButton : Button {
 }
 internal sealed class GoldButton : RoundedButton { public GoldButton(){Gold=true;} }
 internal sealed class Surface : Panel {
-    public Surface(){DoubleBuffered=true;BackColor=Color.FromArgb(247,248,245);}
+    public Surface(){DoubleBuffered=true;BackColor=Color.White;}
+    protected override void OnPaintBackground(PaintEventArgs e){e.Graphics.Clear(Parent?.BackColor??Color.FromArgb(247,248,245));}
     protected override void OnPaint(PaintEventArgs e){
         e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;
         using var shadow=RoundedButton.Shape(new RectangleF(2,5,Width-5,Height-7),24);
@@ -41,20 +52,33 @@ internal sealed class Surface : Panel {
         e.Graphics.FillPath(Brushes.White,shape);using var line=new Pen(Color.FromArgb(232,234,227));e.Graphics.DrawPath(line,shape);
     }
 }
-internal sealed class GalaxyLogo : Control {
-    protected override void OnPaint(PaintEventArgs e) {
-        var g=e.Graphics;g.SmoothingMode=SmoothingMode.AntiAlias;
-        g.ScaleTransform(Width/64f,Height/64f);
-        using var tile=RoundedButton.Shape(new RectangleF(3,2,57,57),17);
-        using var tileFill=new LinearGradientBrush(new Rectangle(0,0,64,64),Color.FromArgb(255,245,185),Color.FromArgb(218,163,31),55);
-        using var shadow=RoundedButton.Shape(new RectangleF(4,7,57,55),17);
-        using var dark=new SolidBrush(Color.FromArgb(187,132,21));g.FillPath(dark,shadow);g.FillPath(tileFill,tile);
-        PointF[] star=[new(32,10),new(38,25),new(52,31),new(38,37),new(32,52),new(26,37),new(12,31),new(26,25)];
-        g.TranslateTransform(0,3);using var depth=new SolidBrush(Color.FromArgb(155,103,12));g.FillPolygon(depth,star);g.TranslateTransform(0,-3);
-        using var gold=new LinearGradientBrush(new Rectangle(12,10,40,42),Color.FromArgb(255,255,231),Color.FromArgb(239,187,52),50);g.FillPolygon(gold,star);
-        using var facet=new SolidBrush(Color.FromArgb(217,155,25));g.FillPolygon(facet,[new PointF(32,31),new(32,52),new(38,37),new(52,31)]);
-        using var orbit=new Pen(Color.FromArgb(255,255,232),1.6f);g.DrawArc(orbit,9,21,46,23,-28,245);
+internal sealed class InputSurface : Panel {
+    public InputSurface(){DoubleBuffered=true;BackColor=Color.FromArgb(248,249,246);Padding=new Padding(15,13,15,10);}
+    protected override void OnPaintBackground(PaintEventArgs e) {
+        e.Graphics.Clear(Parent?.BackColor??Color.White);e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;
+        using var path=RoundedButton.Shape(new RectangleF(1,1,Width-3,Height-3),12);
+        using var fill=new SolidBrush(BackColor);e.Graphics.FillPath(fill,path);
+        using var edge=new Pen(ContainsFocus?Color.FromArgb(200,151,35):Color.FromArgb(224,228,220),ContainsFocus?2:1);e.Graphics.DrawPath(edge,path);
     }
+    protected override void OnControlAdded(ControlEventArgs e){
+        base.OnControlAdded(e);
+        if(e.Control is {} child){child.GotFocus+=(_,_)=>Invalidate();child.LostFocus+=(_,_)=>Invalidate();}
+    }
+}
+internal sealed class GalaxyLogo : Control {
+    readonly Image artwork;
+    public GalaxyLogo(){
+        SetStyle(ControlStyles.SupportsTransparentBackColor|ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer,true);
+        BackColor=Color.Transparent;
+        using var stream=typeof(GalaxyLogo).Assembly.GetManifestResourceStream("GalaxyControl.Assets.galaxy-logo.png")??throw new InvalidOperationException("Galaxy logo resource is missing.");
+        using var source=Image.FromStream(stream);artwork=new Bitmap(source);
+    }
+    protected override void OnPaint(PaintEventArgs e) {
+        e.Graphics.InterpolationMode=InterpolationMode.HighQualityBicubic;
+        e.Graphics.PixelOffsetMode=PixelOffsetMode.HighQuality;
+        e.Graphics.DrawImage(artwork,ClientRectangle);
+    }
+    protected override void Dispose(bool disposing){if(disposing)artwork.Dispose();base.Dispose(disposing);}
 }
 internal sealed class MainWindow : Form {
     readonly TextBox email=new(), token=new(){UseSystemPasswordChar=true};
@@ -74,13 +98,15 @@ internal sealed class MainWindow : Form {
     Form? viewer;
     long lastMove;
     public MainWindow() {
-        Text="Galaxy Control"; ClientSize=new Size(600,760); FormBorderStyle=FormBorderStyle.FixedSingle; MaximizeBox=false;
+        AutoScaleDimensions=new SizeF(96,96);AutoScaleMode=AutoScaleMode.Dpi;
+        Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+        Text="Galaxy Control"; ClientSize=new Size(600,800); FormBorderStyle=FormBorderStyle.FixedSingle; MaximizeBox=false;
         AutoScaleMode=AutoScaleMode.Dpi; BackColor=Color.FromArgb(247,248,245); ForeColor=Color.FromArgb(31,36,32);
         Font=new Font("Segoe UI",11); StartPosition=FormStartPosition.CenterScreen;
         var brand=new Label {Text="Galaxy Control",Font=new Font("Segoe UI",21,FontStyle.Bold),Bounds=new Rectangle(112,37,390,40)};
         var brandNote=new Label {Text="A little help. A world closer.",Bounds=new Rectangle(114,80,390,25),ForeColor=Color.FromArgb(112,118,108),Font=new Font("Segoe UI",10)};
-        Controls.Add(new GalaxyLogo {Bounds=new Rectangle(36,35,64,64)}); Controls.AddRange([brand,brandNote]);
-        var card=new Surface {Bounds=new Rectangle(28,132,544,562)};Controls.Add(card);
+        Controls.Add(new GalaxyLogo {Bounds=new Rectangle(26,22,84,84)}); Controls.AddRange([brand,brandNote]);
+        var card=new Surface {Bounds=new Rectangle(28,132,544,590)};Controls.Add(card);
         Label Copy(string text,int y,int height,int size=10,bool bold=false) {
             var label=new Label {Text=text,Bounds=new Rectangle(30,y,480,height),BackColor=Color.White,Font=new Font("Segoe UI",size,bold?FontStyle.Bold:FontStyle.Regular),ForeColor=bold?Color.FromArgb(31,36,32):Color.FromArgb(106,113,104)};
             card.Controls.Add(label);return label;
@@ -89,30 +115,37 @@ internal sealed class MainWindow : Form {
         var subtitle=Copy("Your technician is just one connection away.",75,30,11);
         Copy("HOW WOULD YOU LIKE TO CONNECT?",122,24,9,true);
         mode.Items.AddRange(["Get help","I'm a technician"]);mode.SelectedIndex=0;mode.SetBounds(30,153,480,34);mode.Font=new Font("Segoe UI",11);
+        mode.Name="connectionMode";mode.AccessibleName="Connection mode";mode.TabIndex=0;mode.IntegralHeight=false;mode.DropDownHeight=100;
+        card.Controls.Add(mode);
         var emailLabel=Copy("Technician email",207,24,10,true);
         void Field(TextBox field,int y) {
-            var border=new Panel {Bounds=new Rectangle(30,y,480,46),BackColor=Color.FromArgb(247,248,245),Padding=new Padding(13,10,13,10)};
+            var border=new InputSurface {Bounds=new Rectangle(30,y,480,50)};
             field.BorderStyle=BorderStyle.None;field.BackColor=border.BackColor;field.Dock=DockStyle.Fill;border.Controls.Add(field);card.Controls.Add(border);
         }
         email.PlaceholderText="technician@example.com";Field(email,236);
-        token.PlaceholderText="Your password";Field(token,292);token.Parent!.Visible=false;
+        email.Name="technicianEmail";email.AccessibleName="Technician email";email.TabIndex=1;
+        token.Name="technicianPassword";token.AccessibleName="Technician password";token.TabIndex=2;
+        token.PlaceholderText="Your password";Field(token,296);token.Parent!.Visible=false;
         var consent=Copy("Your technician can view your screen and control your mouse and keyboard. You can stop sharing at any time.",304,72,10);
-        connect.SetBounds(30,390,480,54);stop.SetBounds(30,456,232,42);accept.SetBounds(274,456,236,42);
+        title.Name="modeTitle";subtitle.Name="modeSubtitle";emailLabel.Name="emailLabel";consent.Name="modeHint";
+        connect.Name="connectButton";stop.Name="stopButton";accept.Name="acceptButton";connect.TabIndex=3;stop.TabIndex=4;accept.TabIndex=5;
+        connect.SetBounds(30,414,480,54);stop.SetBounds(30,482,232,44);accept.SetBounds(274,482,236,44);
         card.Controls.AddRange([connect,stop,accept]);
-        status.SetBounds(58,704,484,44);status.ForeColor=Color.FromArgb(106,113,104);status.Font=new Font("Segoe UI",9);status.Text="Ready when you are. You stay in control.";Controls.Add(status);
+        status.Name="connectionStatus";status.AccessibleName="Connection status";status.SetBounds(58,738,484,48);status.ForeColor=Color.FromArgb(106,113,104);status.Font=new Font("Segoe UI",9);status.Text="Ready when you are. You stay in control.";Controls.Add(status);
         void UpdateMode() {
             bool tech=mode.SelectedIndex==1;token.Parent!.Visible=tech;
-            title.Text=tech?"Your support desk, ready.":"Good help starts here.";
+            title.Text=tech?"Your support desk.":"Good help starts here.";
             subtitle.Text=tech?"Sign in to receive and accept support requests.":"Your technician is just one connection away.";
             emailLabel.Text=tech?"Your technician email":"Technician email";
             email.PlaceholderText=tech?"you@example.com":"technician@example.com";
-            consent.Top=tech?348:304;consent.Height=tech?40:72;
+            consent.Top=tech?358:312;consent.Height=tech?48:72;
             consent.Text=tech?"Sign in with your verified technician account. You choose which support requests to accept.":"Your technician can view your screen and control your mouse and keyboard. You can stop sharing at any time.";
             connect.Text=tech?"Sign in & go online":"Connect to technician";
             stop.Text=tech?"Go offline":"Stop sharing";
             if(!busy)status.Text=tech?"Use the account created during technician setup.":"Ready when you are. You stay in control.";
         }
         mode.SelectedIndexChanged+=(_,_)=>UpdateMode();UpdateMode();
+        AcceptButton=connect;ActiveControl=email;
         connect.Click+=async(_,_)=>await Connect(); stop.Click+=(_,_)=>Disconnect();
         accept.Click+=async(_,_)=>{
             accept.Enabled=false;
@@ -225,7 +258,7 @@ internal sealed class MainWindow : Form {
     }
     void OpenViewer() {
         viewer=new Form {Text="Galaxy Control · Remote desktop",Width=1200,Height=800,KeyPreview=true,BackColor=Color.White};
-        var toolbar=new Button {Text="End session",Dock=DockStyle.Top,Height=42};toolbar.Click+=(_,_)=>Disconnect();
+        var toolbar=new RoundedButton {Text="End session",Dock=DockStyle.Top,Height=48};toolbar.Click+=(_,_)=>Disconnect();
         viewer.Controls.Add(screen);viewer.Controls.Add(toolbar);
         viewer.KeyDown+=async(_,e)=>{if(e.Alt&&e.KeyCode==Keys.F4)return;e.SuppressKeyPress=true;await Input(new {type="input",kind="key",key=(int)e.KeyCode,down=true});};
         viewer.KeyUp+=async(_,e)=>{e.SuppressKeyPress=true;await Input(new {type="input",kind="key",key=(int)e.KeyCode,down=false});};
