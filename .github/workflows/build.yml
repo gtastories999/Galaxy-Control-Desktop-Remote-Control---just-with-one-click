@@ -28,6 +28,13 @@ jobs:
         with:
           dotnet-version: '8.0.x'
       - run: dotnet publish src/GalaxyControl -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o artifacts/windows
+      - name: Verify public build has no operator project
+        shell: pwsh
+        run: |
+          $config = Get-Content artifacts/windows/connection.json -Raw | ConvertFrom-Json
+          if ($config.SupabaseUrl -ne 'https://YOUR-PROJECT.supabase.co') { throw 'Public build contains an operator project URL.' }
+          if ($config.SupabasePublishableKey -ne 'YOUR_SUPABASE_PUBLISHABLE_KEY') { throw 'Public build contains an operator API key.' }
+          if (Test-Path artifacts/windows/connection.local.json) { throw 'Local configuration was included in the public artifact.' }
       - name: Ensure WebView2 Runtime
         shell: pwsh
         run: |

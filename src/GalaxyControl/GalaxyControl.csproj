@@ -10,6 +10,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
     <EmbeddedResource Include="Transport/*.js" />
+    <None Include="../../LICENSE" Link="LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../licenses/*.txt" Link="licenses/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
     <None Update="connection.example.json" TargetPath="connection.json" CopyToOutputDirectory="PreserveNewest" Condition="!Exists('connection.local.json')" />
     <None Update="connection.local.json" TargetPath="connection.json" CopyToOutputDirectory="PreserveNewest" Condition="Exists('connection.local.json')" />
   </ItemGroup>

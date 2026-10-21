@@ -62,3 +62,7 @@ The app uses standard user permissions. Elevated windows, UAC secure desktop, Ct
 ## Reference
 
 Reviewed [miroslavpejic85/p2p](https://github.com/miroslavpejic85/p2p). Galaxy Control is a fresh .NET 8/browser-WebRTC implementation inspired by its screen/input concept; it does not copy the reference's UDT networking, cryptography or binaries.
+
+## License
+
+Galaxy Control's original code is [MIT-licensed](LICENSE). Microsoft WebView2 is redistributed under its own [license](licenses/WebView2-LICENSE.txt) and [notices](licenses/WebView2-NOTICE.txt), included in Windows artifacts. Test dependencies retain their respective package licenses.
