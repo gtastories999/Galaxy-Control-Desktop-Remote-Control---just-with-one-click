@@ -29,7 +29,7 @@ internal static class Program {
         var mode=Find<ComboBox>("connectionMode");
         Require(mode.Visible&&mode.Enabled&&mode.IsHandleCreated&&mode.Parent is not null,"Connection mode must be attached, visible and selectable.");
         Require(mode.Items.Count==2,"Both support roles must be available.");
-        Require(mode.Width>=300*scale&&mode.Height>=24*scale,"Role selector must have a usable size.");
+        Require(mode.Width>=300*scale&&mode.Height>=mode.Font.Height+4,"Role selector must have a usable size.");
         mode.DroppedDown=true;Application.DoEvents();Require(mode.DroppedDown,"Native role dropdown must open.");mode.DroppedDown=false;
         var hint=Find<Label>("modeHint");var password=Find<TextBox>("technicianPassword");var connect=Find<Button>("connectButton");
         mode.SelectedIndex=0;Application.DoEvents();
@@ -41,7 +41,7 @@ internal static class Program {
         Require(hint.Text.Contains("verified technician account")&&!hint.Text.Contains("view your screen"),"Technician hint must describe account sign-in, not screen sharing.");
         Require(connect.Text=="Sign in & go online"&&Find<Button>("stopButton").Text=="Go offline","Technician actions must match the role.");
         Require(hint.Bottom<=connect.Top,"Role explanation must not overlap the primary action.");
-        Require(password.Parent!.Bottom<=hint.Top,"Password and explanation must not overlap.");
+        Require(password.Parent!.Bottom<=hint.Top,$"Password and explanation must not overlap at {scale*100}%. Password bottom={password.Parent.Bottom}, hint top={hint.Top}.");
         foreach(var button in controls.OfType<Button>()) {
             Require(button.Region is not null&&!button.Region.IsVisible(0,0),"Button background and hit region must exclude square corners.");
             Require(button.Region!.IsVisible(button.Width/2,button.Height/2),"Button center must remain clickable.");

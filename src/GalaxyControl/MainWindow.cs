@@ -138,7 +138,9 @@ internal sealed class MainWindow : Form {
             subtitle.Text=tech?"Sign in to receive and accept support requests.":"Your technician is just one connection away.";
             emailLabel.Text=tech?"Your technician email":"Technician email";
             email.PlaceholderText=tech?"you@example.com":"technician@example.com";
-            consent.Top=tech?358:312;consent.Height=tech?48:72;
+            var layoutScale=email.Parent!.Height/50f;
+            consent.Top=(tech?token.Parent!.Bottom:email.Parent.Bottom)+(int)Math.Round((tech?12:26)*layoutScale);
+            consent.Height=(int)Math.Round((tech?48:72)*layoutScale);
             consent.Text=tech?"Sign in with your verified technician account. You choose which support requests to accept.":"Your technician can view your screen and control your mouse and keyboard. You can stop sharing at any time.";
             connect.Text=tech?"Sign in & go online":"Connect to technician";
             stop.Text=tech?"Go offline":"Stop sharing";
