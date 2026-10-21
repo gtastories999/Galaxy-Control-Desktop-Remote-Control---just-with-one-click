@@ -31,15 +31,22 @@ internal sealed class PeerBridge : IDisposable {
         core.PermissionRequested += (_, e) => e.State = CoreWebView2PermissionState.Deny;
         core.ProcessFailed += (_, _) => { if(!disposed) Failed?.Invoke(); };
         core.WebMessageReceived += (_, e) => {
-            if (disposed || e.Source != "about:blank") return;
+            if (disposed) return;
+            if (!ready.Task.IsCompleted) Console.WriteLine("Transport bootstrap message from: " + e.Source);
+            if (e.Source != "about:blank") return;
             try {
                 using var json = JsonDocument.Parse(e.WebMessageAsJson);
                 var message = json.RootElement;
                 if (message.GetProperty("type").GetString() == "ready") ready.TrySetResult();
+                else if (message.GetProperty("type").GetString() == "bootstrap-error") ready.TrySetException(new InvalidOperationException("Local transport initialization failed: " + message.GetProperty("message").GetString()));
                 else Message?.Invoke(message.Clone());
             } catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException) { Failed?.Invoke(); }
         };
-        var script = ReadResource("peer.js") + "\n" + ReadResource("bridge.js");
+        core.NavigationCompleted += async (_, e) => {
+            if (!e.IsSuccess) ready.TrySetException(new IOException("Local transport navigation failed: " + e.WebErrorStatus));
+            if (!ready.Task.IsCompleted) Console.WriteLine("Transport bootstrap state: " + await core.ExecuteScriptAsync("JSON.stringify({url:location.href,peer:typeof GalaxyPeer,bridge:typeof chrome?.webview})"));
+        };
+        var script = "window.addEventListener('error', event => chrome.webview.postMessage({type:'bootstrap-error',message:event.message}));\n" + ReadResource("peer.js") + "\n" + ReadResource("bridge.js");
         core.NavigateToString("<!doctype html><meta charset='utf-8'><title>Galaxy Control transport</title><script>" + script + "</script>");
         await ready.Task.WaitAsync(TimeSpan.FromSeconds(20), cancellationToken);
         view.Visible = false;
