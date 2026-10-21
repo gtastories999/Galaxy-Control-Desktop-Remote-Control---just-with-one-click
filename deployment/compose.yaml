@@ -1,8 +1,8 @@
 services:
-  relay:
+  signaling:
     build:
       context: ..
-      dockerfile: src/GalaxyControl.Relay/Dockerfile
+      dockerfile: src/GalaxyControl.Signaling/Dockerfile
     environment:
       GALAXY_TECHNICIANS: ${GALAXY_TECHNICIANS:?Run scripts/configure.py first}
     restart: unless-stopped

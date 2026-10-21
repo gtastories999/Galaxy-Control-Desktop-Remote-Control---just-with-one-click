@@ -1,1 +1,4 @@
-{"RelayUrl":"wss://YOUR-RELAY-DOMAIN/connect"}
+{
+  "SignalingUrl": "wss://YOUR-SIGNALING-DOMAIN/connect",
+  "StunUrls": ["stun:stun.l.google.com:19302"]
+}

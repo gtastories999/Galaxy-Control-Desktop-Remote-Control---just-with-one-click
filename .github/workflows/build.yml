@@ -3,25 +3,41 @@ on: [push, pull_request, workflow_dispatch]
 permissions:
   contents: read
 jobs:
-  relay:
+  signaling-and-p2p:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-      - run: dotnet build src/GalaxyControl.Relay -c Release
+      - run: dotnet build src/GalaxyControl.Signaling -c Release
       - run: pip install websockets==15.0.1
-      - run: python3 tests/relay.py
+      - run: python3 tests/signaling.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
   windows:
     runs-on: windows-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
       - run: dotnet publish src/GalaxyControl -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o artifacts/windows
+      - name: Ensure WebView2 Runtime
+        shell: pwsh
+        run: |
+          Invoke-WebRequest 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile "$env:TEMP/WebView2Setup.exe"
+          $installer = Start-Process "$env:TEMP/WebView2Setup.exe" -ArgumentList '/silent','/install' -Wait -PassThru
+          Write-Host "WebView2 installer exit code: $($installer.ExitCode)"
+      - name: Test actual Windows WebView2 peer transport
+        run: dotnet run --project tests/WindowsTransport -c Release
       - uses: actions/upload-artifact@v4
         with:
-          name: Galaxy-Control-Windows-x64
+          name: Galaxy-Control-P2P-Windows-x64
           path: artifacts/windows/

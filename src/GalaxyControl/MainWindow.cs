@@ -2,6 +2,7 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Net.WebSockets;
 using System.Text.Json;
+using Microsoft.Web.WebView2.Core;
 namespace GalaxyControl;
 internal sealed class GoldButton : Button {
     protected override void OnPaint(PaintEventArgs e) {
@@ -29,7 +30,12 @@ internal sealed class MainWindow : Form {
     readonly SemaphoreSlim sendLock=new(1);
     ClientWebSocket? socket;
     CancellationTokenSource? lifetime;
-    bool active,technician,busy;
+    bool active,technician,busy,negotiating,framePending;
+    PeerBridge? peer;
+    string sessionId = "";
+    string[] stunUrls = [];
+    DateTime negotiationStarted;
+    readonly System.Windows.Forms.Timer heartbeat = new() { Interval = 1000 };
     Form? viewer;
     long lastMove;
     public MainWindow() {
@@ -50,7 +56,13 @@ internal sealed class MainWindow : Form {
         mode.SelectedIndexChanged+=(_,_)=>{token.Visible=mode.SelectedIndex==1;connect.Text=mode.SelectedIndex==1?"Go online":"Connect to technician";};
         connect.Click+=async(_,_)=>await Connect(); stop.Click+=(_,_)=>Disconnect();
         accept.Click+=async(_,_)=>{accept.Enabled=false;await SendSafe(new {type="accept"});};
-        FormClosing+=(_,_)=>Disconnect();
+        heartbeat.Tick+=(_,_)=>{
+            if (negotiating && !active && DateTime.UtcNow-negotiationStarted>TimeSpan.FromSeconds(30)) {
+                EndWithMessage("No direct route was found. Your network may block P2P. No relay was used."); return;
+            }
+            if(active) PostPeer(new {type="tick", id=sessionId});
+        };
+        FormClosing+=(_,_)=>{Disconnect();heartbeat.Dispose();};
         screen.MouseMove+=async(_,e)=>{
             if(Environment.TickCount64-lastMove<40) return; lastMove=Environment.TickCount64;
             var point=Coordinates(e.Location); if(point is {} p) await Input(new {type="input",kind="move",x=p.X,y=p.Y});
@@ -65,10 +77,27 @@ internal sealed class MainWindow : Form {
         var w=image.Width*scale; var h=image.Height*scale; var x=(p.X-(screen.Width-w)/2)/w; var y=(p.Y-(screen.Height-h)/2)/h;
         return x<0||x>1||y<0||y>1?null:new PointF((float)x,(float)y);
     }
-    async Task Input(object message) {if(active&&technician) await SendSafe(message);}
-    async Task SendSafe(object message) {try{await Send(JsonSerializer.SerializeToUtf8Bytes(message),WebSocketMessageType.Text,lifetime?.Token??default);}catch(Exception e) when(e is WebSocketException or OperationCanceledException or ObjectDisposedException){Disconnect();}}
-    async Task Send(byte[] data,WebSocketMessageType type,CancellationToken ct) {
-        await sendLock.WaitAsync(ct); try { if(socket?.State==WebSocketState.Open) await socket.SendAsync(new ArraySegment<byte>(data),type,true,ct); } finally {sendLock.Release();}
+    Task Input(object message) {
+        if(active&&technician) PostPeer(new {type="input", id=sessionId, input=message});
+        return Task.CompletedTask;
+    }
+    void PostPeer(object message) {
+        try { peer?.Post(message); }
+        catch(Exception e) when(e is InvalidOperationException or ObjectDisposedException or System.Runtime.InteropServices.COMException) {
+            EndWithMessage("The peer transport stopped. Sharing has ended.");
+        }
+    }
+    void EndWithMessage(string message) { Disconnect(false); status.Text=message; }
+    async Task SendSafe(object message) {
+        try {
+            await sendLock.WaitAsync(lifetime?.Token??default);
+            try {
+                if(socket?.State!=WebSocketState.Open) throw new WebSocketException("Signaling is disconnected.");
+                await socket.SendAsync(new ArraySegment<byte>(JsonSerializer.SerializeToUtf8Bytes(message)),WebSocketMessageType.Text,true,lifetime?.Token??default);
+            } finally {sendLock.Release();}
+        } catch(Exception e) when(e is WebSocketException or OperationCanceledException or ObjectDisposedException) {
+            if(busy && lifetime?.IsCancellationRequested!=true) EndWithMessage("Signaling disconnected. Sharing has ended.");
+        }
     }
     async Task Connect() {
         if(busy)return;
@@ -77,38 +106,77 @@ internal sealed class MainWindow : Form {
         if(technician&&string.IsNullOrWhiteSpace(token.Text)){status.Text="Enter your technician access key.";return;}
         try {
             using var config=JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory,"connection.json")));
-            var endpoint=new Uri(config.RootElement.GetProperty("RelayUrl").GetString()!);
-            if(endpoint.Scheme!="wss" || endpoint.Host=="YOUR-RELAY-DOMAIN") throw new InvalidOperationException("Configure a secure relay URL in connection.json first.");
-            busy=true;socket=new ClientWebSocket(); lifetime=new CancellationTokenSource();
-            if(technician) socket.Options.SetRequestHeader("Authorization","Bearer "+token.Text.Trim());
+            var endpoint=new Uri(config.RootElement.GetProperty("SignalingUrl").GetString()!);
+            if(endpoint.Scheme!="wss" || endpoint.Host.Equals("your-signaling-domain",StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Configure a secure signaling URL in connection.json first.");
+            stunUrls=config.RootElement.GetProperty("StunUrls").EnumerateArray().Select(value=>value.GetString()??"").ToArray();
+            if(stunUrls.Length>4 || stunUrls.Any(url=>!System.Text.RegularExpressions.Regex.IsMatch(url,@"^stun:[a-zA-Z0-9.-]+(?::\d+)?$")))
+                throw new InvalidOperationException("Only STUN discovery servers are allowed. TURN relays are disabled.");
+            busy=true;socket=new ClientWebSocket();lifetime=new CancellationTokenSource(TimeSpan.FromHours(1));
+            sessionId=Guid.NewGuid().ToString("N");
+            connect.Enabled=false;mode.Enabled=false;email.Enabled=false;token.Enabled=false;stop.Enabled=true;status.Text="Preparing secure P2P transport…";
+            peer=new PeerBridge();
+            peer.Message+=async message=>await HandlePeerMessage(message);
+            peer.Failed+=()=>EndWithMessage("The peer transport stopped. Sharing has ended.");
+            await peer.Initialize(this,lifetime.Token);
+            if(technician)socket.Options.SetRequestHeader("Authorization","Bearer "+token.Text.Trim());
             var uri=new UriBuilder(endpoint){Query=$"role={(technician?"technician":"host")}&email={Uri.EscapeDataString(address.Address.ToLowerInvariant())}"};
-            connect.Enabled=false;mode.Enabled=false;email.Enabled=false;token.Enabled=false;stop.Enabled=true;status.Text="Connecting…";
+            status.Text="Connecting to your technician…";
             using var deadline=CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);deadline.CancelAfter(TimeSpan.FromSeconds(15));
             await socket.ConnectAsync(uri.Uri,deadline.Token);
             await Receive(lifetime.Token);
-        } catch(Exception e) when(e is WebSocketException or OperationCanceledException or IOException or JsonException or InvalidOperationException or FormatException or KeyNotFoundException or System.Runtime.InteropServices.ExternalException or ArgumentException) {status.Text=e is InvalidOperationException?e.Message:"Connection ended or unavailable. Check the relay and technician details.";}
-        finally {if(active)status.Text="Session ended. Your computer is no longer shared.";busy=false;Disconnect(false);}
+        } catch(WebView2RuntimeNotFoundException) {
+            status.Text="Microsoft Edge WebView2 Runtime is required. Install it from Microsoft's official WebView2 download page.";
+        } catch(Exception e) when(e is WebSocketException or OperationCanceledException or IOException or JsonException or InvalidOperationException or FormatException or KeyNotFoundException or TimeoutException or System.Runtime.InteropServices.ExternalException or ArgumentException) {
+            if(lifetime?.IsCancellationRequested!=true)status.Text=e is InvalidOperationException?e.Message:"Connection ended or unavailable. Check the signaling service and technician details.";
+        } finally {busy=false;Disconnect(false);lifetime?.Dispose();lifetime=null;}
     }
     async Task Receive(CancellationToken ct) {
-        var buffer=new byte[2*1024*1024];
+        var buffer=new byte[32768];
         while(socket?.State==WebSocketState.Open) {
-            using var data=new MemoryStream(); WebSocketReceiveResult part;
-            do {part=await socket.ReceiveAsync(new ArraySegment<byte>(buffer),ct);if(part.MessageType==WebSocketMessageType.Close)return;
-                if(data.Length+part.Count>buffer.Length)throw new IOException("Message too large.");data.Write(buffer,0,part.Count);
-            } while(!part.EndOfMessage);
-            if(part.MessageType==WebSocketMessageType.Binary && technician && active) {
-                data.Position=0;using var frame=Image.FromStream(data);var previous=screen.Image;screen.Image=new Bitmap(frame);previous?.Dispose();continue;
-            }
-            if(part.MessageType!=WebSocketMessageType.Text)continue;
+            using var data=new MemoryStream();WebSocketReceiveResult part;
+            do {
+                part=await socket.ReceiveAsync(new ArraySegment<byte>(buffer),ct);
+                if(part.MessageType==WebSocketMessageType.Close){EndWithMessage("Session ended. Your computer is no longer shared.");return;}
+                if(part.MessageType!=WebSocketMessageType.Text || data.Length+part.Count>buffer.Length)throw new IOException("Invalid signaling message.");
+                data.Write(buffer,0,part.Count);
+            }while(!part.EndOfMessage);
             using var json=JsonDocument.Parse(data.ToArray());var root=json.RootElement;var type=root.GetProperty("type").GetString();
-            if(type=="input" && active && !technician){NativeInput.Apply(root);continue;}
             if(root.TryGetProperty("message",out var message))status.Text=message.GetString();
             if(type=="error")return;
             if(type=="request"){accept.Visible=true;accept.Enabled=true;}
-            if(type=="connected") {
-                active=true;TopMost=!technician;accept.Visible=false;BackColor=Color.FromArgb(255,247,218);
-                if(technician) OpenViewer(); else _=CaptureScreen(ct);
+            else if(type=="negotiate") {
+                if(negotiating)throw new IOException("Duplicate connection request.");
+                negotiating=true;negotiationStarted=DateTime.UtcNow;accept.Visible=false;
+                status.Text="Establishing a direct, encrypted P2P connection…";
+                heartbeat.Start();
+                PostPeer(new {type="start",id=sessionId,role=technician?"technician":"host",stunUrls});
+            }else if(type is "offer" or "answer" or "candidate") {
+                if(!negotiating)throw new IOException("Unexpected signaling message.");
+                PostPeer(new {type="signal",id=sessionId,signal=root.Clone()});
             }
+        }
+    }
+    async Task HandlePeerMessage(JsonElement message) {
+        if(!busy || !message.TryGetProperty("id",out var messageId) || messageId.GetString()!=sessionId)return;
+        try {
+            var type=message.GetProperty("type").GetString();
+            if(type=="signal")await SendSafe(message.GetProperty("signal"));
+            else if(type=="connected" && negotiating && !active) {
+                active=true;TopMost=!technician;BackColor=Color.FromArgb(255,247,218);
+                status.Text="Connected directly · encrypted P2P · no relay";
+                if(technician)OpenViewer();else _=CaptureScreen(lifetime!.Token,sessionId);
+            }else if(type=="frame-ready")framePending=false;
+            else if(type=="frame" && active && technician) {
+                var encoded=message.GetProperty("data").GetString()!;
+                if(encoded.Length>2800000)throw new IOException("Frame is too large.");
+                using var data=new MemoryStream(Convert.FromBase64String(encoded));
+                using var frame=Image.FromStream(data);
+                if((long)frame.Width*frame.Height>8000000)throw new IOException("Frame dimensions are too large.");
+                var previous=screen.Image;screen.Image=new Bitmap(frame);previous?.Dispose();
+            }else if(type=="input" && active && !technician)NativeInput.Apply(message.GetProperty("input"));
+            else if(type=="ended")EndWithMessage(message.GetProperty("message").GetString()??"Session ended.");
+        }catch(Exception e) when(e is JsonException or FormatException or KeyNotFoundException or InvalidOperationException or IOException or ArgumentException or System.Runtime.InteropServices.ExternalException) {
+            EndWithMessage("Invalid peer data. Sharing has ended.");
         }
     }
     void OpenViewer() {
@@ -120,21 +188,39 @@ internal sealed class MainWindow : Form {
         viewer.Deactivate+=async(_,_)=>{for(var key=1;key<255;key++)await Input(new {type="input",kind="key",key,down=false});for(var button=0;button<2;button++)await Input(new {type="input",kind="button",button,down=false});};
         viewer.FormClosing+=(_,_)=>{if(active)Disconnect();};viewer.Show();
     }
-    async Task CaptureScreen(CancellationToken ct) {
+    async Task CaptureScreen(CancellationToken ct,string id) {
         try {
             var bounds=Screen.PrimaryScreen!.Bounds;
             using var bitmap=new Bitmap(bounds.Width,bounds.Height);using var graphics=Graphics.FromImage(bitmap);
-            var encoder=ImageCodecInfo.GetImageEncoders().Single(c=>c.MimeType=="image/jpeg");using var quality=new EncoderParameters(1);quality.Param[0]=new EncoderParameter(System.Drawing.Imaging.Encoder.Quality,45L);
-            while(active&&!ct.IsCancellationRequested) {
-                graphics.CopyFromScreen(bounds.Location,Point.Empty,bounds.Size);
-                using var data=new MemoryStream();bitmap.Save(data,encoder,quality);
-                if(data.Length<=2*1024*1024)await Send(data.ToArray(),WebSocketMessageType.Binary,ct);
+            var scale=Math.Min(1d,1600d/Math.Max(bounds.Width,bounds.Height));
+            using var resized=new Bitmap((int)(bounds.Width*scale),(int)(bounds.Height*scale));
+            using var resizeGraphics=Graphics.FromImage(resized);
+            resizeGraphics.InterpolationMode=InterpolationMode.HighQualityBilinear;
+            var encoder=ImageCodecInfo.GetImageEncoders().Single(c=>c.MimeType=="image/jpeg");using var quality=new EncoderParameters(1);quality.Param[0]=new EncoderParameter(System.Drawing.Imaging.Encoder.Quality,50L);
+            while(active&&!ct.IsCancellationRequested&&sessionId==id) {
+                if(!framePending) {
+                    graphics.CopyFromScreen(bounds.Location,Point.Empty,bounds.Size);
+                    resizeGraphics.DrawImage(bitmap,0,0,resized.Width,resized.Height);
+                    using var data=new MemoryStream();resized.Save(data,encoder,quality);
+                    if(data.Length<=2*1024*1024) {
+                        framePending=true;
+                        PostPeer(new {type="frame",id,data=Convert.ToBase64String(data.ToArray())});
+                    }
+                }
                 await Task.Delay(160,ct);
             }
-        }catch(Exception e) when(e is OperationCanceledException or WebSocketException or System.Runtime.InteropServices.ExternalException or IOException){Disconnect();}
+        }catch(Exception e) when(e is OperationCanceledException or System.Runtime.InteropServices.ExternalException or IOException or ArgumentException) {
+            if(sessionId==id && !ct.IsCancellationRequested)EndWithMessage("Screen capture stopped. Sharing has ended.");
+        }
     }
+
     void Disconnect(bool updateStatus=true) {
-        active=false;TopMost=false;lifetime?.Cancel();socket?.Abort();socket?.Dispose();socket=null;
+        active=false;negotiating=false;framePending=false;TopMost=false;heartbeat.Stop();
+        var bridge=peer;peer=null;
+        try {bridge?.Post(new {type="close",id=sessionId});}catch(Exception e) when(e is InvalidOperationException or ObjectDisposedException or System.Runtime.InteropServices.COMException) { /* Continue closing native capture and sockets. */ }
+        sessionId="";
+        lifetime?.Cancel();socket?.Abort();socket?.Dispose();socket=null;
+        bridge?.Dispose();
         NativeInput.ReleaseAll();
         var old=viewer;viewer=null;if(old is not null){old.Controls.Remove(screen);old.Close();old.Dispose();}
         screen.Image?.Dispose();screen.Image=null;

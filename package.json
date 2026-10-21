@@ -1,0 +1,6 @@
+{
+  "name": "galaxy-control-transport-tests",
+  "private": true,
+  "scripts": {"test": "node tests/p2p.cjs"},
+  "devDependencies": {"playwright": "1.62.1"}
+}

@@ -4,3 +4,4 @@ obj/
 artifacts/
 *.user
 .env
+node_modules/

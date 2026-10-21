@@ -1,4 +1,4 @@
-"""Prepare a single-technician relay. Never commit deployment/.env."""
+"""Prepare a single-technician signaling. Never commit deployment/.env."""
 import hashlib
 import json
 from pathlib import Path
@@ -22,6 +22,6 @@ hashed = hashlib.sha256(key.encode()).hexdigest()
 with config.open('x') as output:
     output.write('GALAXY_DOMAIN=' + domain + '\nGALAXY_TECHNICIANS=' + json.dumps({email: hashed}) + '\n')
 config.chmod(0o600)
-(root / 'src/GalaxyControl/connection.json').write_text(json.dumps({'RelayUrl': 'wss://' + domain + '/connect'}) + '\n')
+(root / 'src/GalaxyControl/connection.json').write_text(json.dumps({'SignalingUrl': 'wss://' + domain + '/connect', 'StunUrls': ['stun:stun.l.google.com:19302']}) + '\n')
 print('Configuration ready. Store this technician access key privately; it is shown only now:\n' + key)
-print('Start the relay with: docker compose --env-file deployment/.env -f deployment/compose.yaml up -d --build')
+print('Start the signaling with: docker compose --env-file deployment/.env -f deployment/compose.yaml up -d --build')
