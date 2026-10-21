@@ -79,6 +79,7 @@ async function waitFor(condition, label, ms = 15000) {
         await bridgePage.goto(url);
         await bridgePage.evaluate(() => {
             window.bridgeEvents = [];
+            window.chrome = window.chrome || {};
             window.chrome.webview = { addEventListener(_type, callback) { window.command = callback; }, postMessage(message) { bridgeEvents.push(message); } };
         });
         await bridgePage.addScriptTag({ content: bridge });
