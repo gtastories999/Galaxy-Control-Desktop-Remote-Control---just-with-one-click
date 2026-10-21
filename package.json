@@ -3,7 +3,8 @@
   "private": true,
   "scripts": {
     "test": "node tests/p2p.cjs",
-    "test:database": "node tests/supabase-schema.cjs"
+    "test:database": "node tests/supabase-schema.cjs",
+    "test:setup": "node tests/technician-setup.cjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.11",

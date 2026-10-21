@@ -1,0 +1,40 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const html = fs.readFileSync('setup/Technician-Setup.html', 'utf8');
+const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+const elements = {};
+for (const id of ['configuration','config','create','signup','email','password','verification','intro','status','resend']) {
+  elements[id] = {value:'', hidden:false, disabled:false, textContent:'', handlers:{}, addEventListener(event,handler){this.handlers[event]=handler;}};
+}
+const calls = [];
+let status = 200;
+const context = {URL, AbortSignal, document:{getElementById:id=>elements[id],querySelectorAll:()=>[elements.create,elements.resend]}, fetch:async(url,options)=>{calls.push({url,options});return {ok:status===200,status,json:async()=>({})};}};
+vm.runInNewContext(script,context);
+const flush = () => new Promise(resolve=>setImmediate(resolve));
+(async()=>{
+  assert.equal(elements.create.disabled,true,'Unconfigured setup must not send credentials');
+  elements.config.files=[{size:100,text:async()=>JSON.stringify({SupabaseUrl:'https://example.supabase.co',SupabasePublishableKey:'sb_secret_do_not_ship'})}];
+  await elements.config.handlers.change();
+  assert.equal(elements.create.disabled,true,'Secret keys must be rejected');
+  elements.config.files=[{size:100,text:async()=>JSON.stringify({SupabaseUrl:'https://example.supabase.co',SupabasePublishableKey:'sb_publishable_test_only_not_a_real_project'})}];
+  await elements.config.handlers.change();
+  assert.equal(elements.create.disabled,false);
+  elements.email.value='Tech@Example.com';elements.password.value='private-test-password';
+  elements.signup.handlers.submit({preventDefault(){}});await flush();
+  assert.equal(calls.length,1);
+  assert.equal(calls[0].url,'https://example.supabase.co/auth/v1/signup');
+  assert.equal(calls[0].options.credentials,'omit');
+  assert.equal(calls[0].options.headers.Authorization,undefined);
+  assert.deepEqual(JSON.parse(calls[0].options.body),{email:'tech@example.com',password:'private-test-password'});
+  assert.equal(elements.password.value,'','Password must be cleared after signup');
+  assert.equal(elements.signup.hidden,true);
+  assert.match(elements.intro.textContent,/confirmation email/);
+  assert.equal(elements.verification.hidden,false);
+  status=429;elements.resend.handlers.click();await flush();
+  assert.equal(calls[1].url,'https://example.supabase.co/auth/v1/resend');
+  assert.deepEqual(JSON.parse(calls[1].options.body),{email:'tech@example.com',type:'signup'});
+  assert.match(elements.status.textContent,/Too many attempts/);
+  assert.equal(elements.resend.disabled,false);
+  console.log('PASS: setup requires public configuration, uses email confirmation, clears passwords and handles rate limits.');
+})().catch(error=>{console.error(error);process.exitCode=1;});

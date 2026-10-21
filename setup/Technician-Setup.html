@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Galaxy Control · Technician setup</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#fafaf7;color:#292820;font:16px/1.5 system-ui,sans-serif;display:grid;min-height:100vh;place-items:center;padding:24px}main{width:min(100%,480px);background:white;border:1px solid #eae7dd;border-radius:24px;padding:36px;box-shadow:0 20px 80px #51421b0b}.brand{color:#ad7916;font-size:18px;font-weight:700;display:flex;align-items:center;gap:12px}.star{font-size:32px;background:linear-gradient(135deg,#ffe650,#c88c14);color:transparent;background-clip:text}h1{font-size:30px;line-height:1.2;margin:24px 0 12px}p{color:#6d6b61}label{display:block;font-weight:600;margin-top:18px}input,button{font:inherit;width:100%;padding:13px 15px;border-radius:10px;border:1px solid #dcd8cc;margin-top:6px}input:focus{outline:2px solid #dba52c;outline-offset:2px}button{cursor:pointer;font-weight:650;background:linear-gradient(120deg,#ffe153,#dea52a);border:0;margin-top:24px;color:#302810}button:disabled{opacity:.55;cursor:wait}.secondary{background:#f3f2ec;font-size:14px;margin-top:12px}#status{min-height:48px;font-size:14px;margin-bottom:0}small{display:block;color:#6d6b61;margin-top:20px}[hidden]{display:none!important}
+</style>
+<main>
+<div class="brand"><span class="star" aria-hidden="true">✦</span> Galaxy Control</div>
+<h1>Set up your technician account.</h1>
+<p id="intro">Create your account once. Customers will connect using your verified email.</p>
+<div id="configuration" hidden><label for="config">Choose your app's connection.json</label><input id="config" type="file" accept=".json,application/json"><small>Use the configuration from your own Galaxy Control app folder.</small></div>
+<form id="signup">
+<label for="email">Your email</label><input id="email" type="email" autocomplete="email" required maxlength="254">
+<label for="password">Choose a password</label><input id="password" type="password" autocomplete="new-password" minlength="10" required>
+<button id="create">Create account and send confirmation</button>
+</form>
+<div id="verification" hidden><button id="resend" type="button" class="secondary">Resend confirmation email</button></div>
+<p id="status" role="status" aria-live="polite">Your password stays private. This page does not save credentials.</p>
+</main>
+<script>
+'use strict';
+let settings = /* GALAXY_PUBLIC_CONFIGURATION */ {};
+let pendingEmail = '';
+const $ = id => document.getElementById(id);
+function validConfig(value) {
+  try {const u=new URL(value.SupabaseUrl);return u.protocol==='https:'&&!u.username&&!u.password&&u.pathname==='/'&&!u.search&&!u.hash&&/^sb_publishable_[A-Za-z0-9_-]{12,}$/.test(value.SupabasePublishableKey);}
+  catch{return false;}
+}
+function updateConfig() {
+  $('configuration').hidden=validConfig(settings);
+  $('create').disabled=!validConfig(settings);
+}
+updateConfig();
+$('config').addEventListener('change',async()=>{
+  try{const file=$('config').files[0];if(!file||file.size>8192)throw Error();const candidate=JSON.parse(await file.text());if(!validConfig(candidate))throw Error();settings=candidate;updateConfig();$('status').textContent='Ready to create your account.';}
+  catch{$('status').textContent='Choose a valid connection.json containing a publishable app key.';}
+});
+async function auth(path,body) {
+  const response=await fetch(settings.SupabaseUrl.replace(/\/$/,'')+'/auth/v1/'+path,{method:'POST',credentials:'omit',referrerPolicy:'no-referrer',headers:{'Content-Type':'application/json',apikey:settings.SupabasePublishableKey},body:JSON.stringify(body),signal:AbortSignal.timeout(20000)});
+  const result=await response.json();
+  if(!response.ok){
+    if(response.status===429)throw Error('Too many attempts. Wait a minute before trying again.');
+    if(result.error_code==='email_address_not_authorized')throw Error('Email delivery is not configured for this address. Ask the app operator to configure Supabase email delivery.');
+    throw Error('Account setup failed. Check your email and password, or contact the app operator.');
+  }
+  return result;
+}
+async function perform(action) {
+  for(const b of document.querySelectorAll('button'))b.disabled=true;
+  try {await action();}
+  catch(e){$('status').textContent=e instanceof TypeError||e.name==='TimeoutError'?'Cannot reach account services. Check your connection and try again.':e.message;}
+  finally{for(const b of document.querySelectorAll('button'))b.disabled=false;updateConfig();}
+}
+$('signup').addEventListener('submit',event=>{event.preventDefault();perform(async()=>{
+  if(!validConfig(settings))throw Error('Choose your app configuration first.');
+  pendingEmail=$('email').value.trim().toLowerCase();
+  await auth('signup',{email:pendingEmail,password:$('password').value});
+  $('password').value='';$('signup').hidden=true;$('verification').hidden=false;
+  $('intro').textContent='Open the confirmation email sent to '+pendingEmail+' and click its link. Then open Galaxy Control, choose “I’m a technician”, and sign in with your email and password.';
+  $('status').textContent='Confirmation email requested. Check spam too. After clicking the link, return to Galaxy Control; a browser redirect error does not undo a completed email confirmation.';
+});});
+$('resend').addEventListener('click',()=>perform(async()=>{await auth('resend',{email:pendingEmail,type:'signup'});$('status').textContent='Another confirmation email was requested.';}));
+</script>
+</html>

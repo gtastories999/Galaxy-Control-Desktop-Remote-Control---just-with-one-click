@@ -7,7 +7,7 @@ Each operator or GitHub downloader must use their **own** project. No shared Gal
 1. Create a dedicated Supabase project. Keep `public` exposed to the Data API and keep `galaxy_private` **unexposed**.
 2. Run [`schema.sql`](schema.sql) once in its SQL Editor. It creates private, RLS-enabled tables and the authenticated `public.gc_exchange` RPC. No Edge Function or separate signaling server is required. Do not run it against unrelated application tables. Reapplying the installation script is intentionally not destructive; it fails if those tables already exist.
 3. Enable email/password authentication and **Anonymous Sign-Ins** under Auth providers. Keep email confirmation enabled. The customer uses anonymous authentication invisibly, without entering an account or password. This initial client does not implement a CAPTCHA challenge UI; CAPTCHA-protected anonymous sign-ins require an additional client integration. Retain Supabase's managed rate limits and assess the deployment's abuse controls.
-4. Create and confirm each technician's email/password user in Supabase Auth (or let them complete your own verified signup flow). Anonymous and unconfirmed users cannot register an email in the directory. A verified technician can register only the email on their actual Auth user record, never an arbitrary address supplied by the client.
+4. Create and confirm each technician's email/password user in Supabase Auth, or use `setup/Technician-Setup.html`: select your app's `connection.json`, register, and click the emailed confirmation link. The operator-configured ZIP preloads this public client configuration. With default email templates, confirmation completes before the Site URL redirect; return to Galaxy Control afterwards even if the default localhost landing page is unavailable. Configure a suitable Site URL for your own deployment. Supabase's default email provider only delivers to project team addresses; configure custom SMTP before onboarding other technician addresses. Anonymous and unconfirmed users cannot register an email in the directory. A verified technician can register only the email on their actual Auth user record, never an arbitrary address supplied by the client.
 5. Copy the project's HTTPS URL and **publishable** key from its Connect/API settings. Never use a secret key, service-role key or database password in the desktop app.
 6. For a downloaded build, edit its adjacent `connection.json`:
 
@@ -64,3 +64,13 @@ Anonymous Auth users also need an operator-chosen retention policy. Supabase doe
 - [Official Auth client](https://github.com/supabase/auth-js/blob/master/src/GoTrueClient.ts): anonymous `POST /auth/v1/signup`, password-token and refresh-token REST flows.
 
 Account access, provider settings and production credentials remain operator-specific and are not assumed by this repository.
+
+## Package a private operator download
+
+Download the green Windows Actions artifact, then run:
+
+```sh
+python scripts/package-windows.py Galaxy-Control-P2P-Windows-x64.zip src/GalaxyControl/connection.local.json Galaxy-Control-Configured.zip
+```
+
+The ZIP contains the existing tested EXE, public client configuration, a preconfigured technician signup page and start instructions. No management token, secret key, service-role key or password belongs in it. Keep this operator-specific package separate from public generic releases. Customers only open the EXE and enter the technician email; account setup is for technicians once. The setup page uses standard Supabase Auth confirmation emails and stores no credentials.
