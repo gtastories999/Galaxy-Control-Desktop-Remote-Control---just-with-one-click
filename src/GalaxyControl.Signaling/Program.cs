@@ -113,8 +113,17 @@ app.Map("/connect", async context => {
             (ReferenceEquals(current.Host, peer) || ReferenceEquals(current.Technician, peer)) &&
             ((ICollection<KeyValuePair<string, Session>>)sessions).Remove(new(email, current))) {
             var other = role == "host" ? current.Technician : current.Host;
+            // Release the technician slot before the other socket observes the session ending.
+            ((ICollection<KeyValuePair<string,Peer>>)technicians).Remove(new(email, current.Technician));
             // Clients close their direct peer connection if this session's signaling socket ends.
             other.Socket.Abort();
+        }
+        // Flush offline/busy errors and the upgrade response before ending a rejected connection.
+        // An immediate TCP abort here can discard the WebSocket handshake under load.
+        if (socket.State is WebSocketState.Open or WebSocketState.CloseReceived) {
+            using var closing = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+            try { await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Session ended", closing.Token); }
+            catch (Exception e) when (e is WebSocketException or OperationCanceledException or InvalidOperationException) { }
         }
         socket.Abort();
     }

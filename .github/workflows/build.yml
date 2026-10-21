@@ -32,9 +32,19 @@ jobs:
       - name: Ensure WebView2 Runtime
         shell: pwsh
         run: |
-          Invoke-WebRequest 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile "$env:TEMP/WebView2Setup.exe"
-          $installer = Start-Process "$env:TEMP/WebView2Setup.exe" -ArgumentList '/silent','/install' -Wait -PassThru
-          Write-Host "WebView2 installer exit code: $($installer.ExitCode)"
+          $runtimePaths = @(
+            "${env:ProgramFiles(x86)}/Microsoft/EdgeWebView/Application/*/msedgewebview2.exe",
+            "$env:ProgramFiles/Microsoft/EdgeWebView/Application/*/msedgewebview2.exe",
+            "$env:LOCALAPPDATA/Microsoft/EdgeWebView/Application/*/msedgewebview2.exe"
+          )
+          $installed = $runtimePaths | Where-Object { Test-Path $_ }
+          if (-not $installed) {
+            Invoke-WebRequest 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile "$env:TEMP/WebView2Setup.exe"
+            $installer = Start-Process "$env:TEMP/WebView2Setup.exe" -ArgumentList '/silent','/install' -Wait -PassThru
+            Write-Host "WebView2 installer exit code: $($installer.ExitCode)"
+          } else {
+            Write-Host 'Using the installed WebView2 Runtime.'
+          }
       - name: Test actual Windows WebView2 peer transport
         run: dotnet run --project tests/WindowsTransport -c Release
       - uses: actions/upload-artifact@v4
