@@ -5,3 +5,4 @@ artifacts/
 *.user
 .env
 node_modules/
+connection.local.json

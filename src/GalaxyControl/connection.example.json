@@ -1,0 +1,5 @@
+{
+  "SupabaseUrl": "https://YOUR-PROJECT.supabase.co",
+  "SupabasePublishableKey": "YOUR_SUPABASE_PUBLISHABLE_KEY",
+  "StunUrls": ["stun:stun.l.google.com:19302"]
+}

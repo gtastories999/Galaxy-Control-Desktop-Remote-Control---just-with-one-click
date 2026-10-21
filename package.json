@@ -1,6 +1,12 @@
 {
   "name": "galaxy-control-transport-tests",
   "private": true,
-  "scripts": {"test": "node tests/p2p.cjs"},
-  "devDependencies": {"playwright": "1.62.1"}
+  "scripts": {
+    "test": "node tests/p2p.cjs",
+    "test:database": "node tests/supabase-schema.cjs"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.11",
+    "playwright": "1.62.1"
+  }
 }

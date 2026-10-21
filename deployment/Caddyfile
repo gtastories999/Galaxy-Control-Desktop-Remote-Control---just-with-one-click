@@ -1,3 +1,0 @@
-{$GALAXY_DOMAIN} {
-    reverse_proxy signaling:8080
-}

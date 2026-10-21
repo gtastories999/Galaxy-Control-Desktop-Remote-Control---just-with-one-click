@@ -1,6 +1,6 @@
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
-using System.Net.WebSockets;
+using System.Net.Http;
 using System.Text.Json;
 using Microsoft.Web.WebView2.Core;
 namespace GalaxyControl;
@@ -27,8 +27,7 @@ internal sealed class MainWindow : Form {
     readonly GoldButton connect=new(){Text="Connect to technician"};
     readonly Button stop=new(){Text="Stop sharing",Enabled=false}, accept=new(){Text="Accept support request",Visible=false};
     readonly PictureBox screen=new(){Dock=DockStyle.Fill,SizeMode=PictureBoxSizeMode.Zoom,BackColor=Color.FromArgb(24,26,32),TabStop=true};
-    readonly SemaphoreSlim sendLock=new(1);
-    ClientWebSocket? socket;
+    SupabaseDirectory? directory;
     CancellationTokenSource? lifetime;
     bool active,technician,busy,negotiating,framePending;
     PeerBridge? peer;
@@ -47,7 +46,7 @@ internal sealed class MainWindow : Form {
         mode.Items.AddRange(["Get help","I'm a technician"]); mode.SelectedIndex=0; mode.SetBounds(38,198,444,34);
         var emailLabel=new Label {Text="Technician email",Bounds=new Rectangle(38,250,440,26)};
         email.PlaceholderText="technician@example.com"; email.SetBounds(38,282,444,36);
-        token.PlaceholderText="Technician access key"; token.SetBounds(38,330,444,36); token.Visible=false;
+        token.PlaceholderText="Technician password"; token.SetBounds(38,330,444,36); token.Visible=false;
         var consent=new Label {Text="By connecting, you allow this technician to view your primary screen and control your mouse and keyboard until you stop sharing.",Bounds=new Rectangle(38,378,444,65),ForeColor=Color.DimGray,Font=new Font("Segoe UI",10)};
         connect.SetBounds(38,458,444,48); stop.SetBounds(38,516,216,40); accept.SetBounds(266,516,216,40);
         status.SetBounds(38,578,444,55); status.Text="Ready when you are.";
@@ -55,7 +54,11 @@ internal sealed class MainWindow : Form {
         Controls.AddRange([brand,title,subtitle,mode,emailLabel,email,token,consent,connect,stop,accept,status]);
         mode.SelectedIndexChanged+=(_,_)=>{token.Visible=mode.SelectedIndex==1;connect.Text=mode.SelectedIndex==1?"Go online":"Connect to technician";};
         connect.Click+=async(_,_)=>await Connect(); stop.Click+=(_,_)=>Disconnect();
-        accept.Click+=async(_,_)=>{accept.Enabled=false;await SendSafe(new {type="accept"});};
+        accept.Click+=async(_,_)=>{
+            accept.Enabled=false;
+            try {if(directory is not null)await directory.Accept(lifetime!.Token);}
+            catch(Exception e) when(e is HttpRequestException or OperationCanceledException or InvalidOperationException){EndWithMessage(e.Message);}
+        };
         heartbeat.Tick+=(_,_)=>{
             if (negotiating && !active && DateTime.UtcNow-negotiationStarted>TimeSpan.FromSeconds(30)) {
                 EndWithMessage("No direct route was found. Your network may block P2P. No relay was used."); return;
@@ -88,72 +91,53 @@ internal sealed class MainWindow : Form {
         }
     }
     void EndWithMessage(string message) { Disconnect(false); status.Text=message; }
-    async Task SendSafe(object message) {
-        try {
-            await sendLock.WaitAsync(lifetime?.Token??default);
-            try {
-                if(socket?.State!=WebSocketState.Open) throw new WebSocketException("Signaling is disconnected.");
-                await socket.SendAsync(new ArraySegment<byte>(JsonSerializer.SerializeToUtf8Bytes(message)),WebSocketMessageType.Text,true,lifetime?.Token??default);
-            } finally {sendLock.Release();}
-        } catch(Exception e) when(e is WebSocketException or OperationCanceledException or ObjectDisposedException) {
-            if(busy && lifetime?.IsCancellationRequested!=true) EndWithMessage("Signaling disconnected. Sharing has ended.");
+    async Task SendSafe(JsonElement message) {
+        try {if(directory is not null)await directory.Send(message,lifetime!.Token);}
+        catch(Exception e) when(e is HttpRequestException or OperationCanceledException or ObjectDisposedException or InvalidOperationException) {
+            if(busy && lifetime?.IsCancellationRequested!=true)EndWithMessage("Directory disconnected. Sharing has ended.");
         }
     }
     async Task Connect() {
         if(busy)return;
         if(!System.Net.Mail.MailAddress.TryCreate(email.Text.Trim(),out var address)||address.Address!=email.Text.Trim()){status.Text="Please enter a valid technician email.";return;}
         technician=mode.SelectedIndex==1;
-        if(technician&&string.IsNullOrWhiteSpace(token.Text)){status.Text="Enter your technician access key.";return;}
+        if(technician&&string.IsNullOrWhiteSpace(token.Text)){status.Text="Enter your technician password.";return;}
         try {
             using var config=JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory,"connection.json")));
-            var endpoint=new Uri(config.RootElement.GetProperty("SignalingUrl").GetString()!);
-            if(endpoint.Scheme!="wss" || endpoint.Host.Equals("your-signaling-domain",StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("Configure a secure signaling URL in connection.json first.");
             stunUrls=config.RootElement.GetProperty("StunUrls").EnumerateArray().Select(value=>value.GetString()??"").ToArray();
             if(stunUrls.Length>4 || stunUrls.Any(url=>!System.Text.RegularExpressions.Regex.IsMatch(url,@"^stun:[a-zA-Z0-9.-]+(?::\d+)?$")))
                 throw new InvalidOperationException("Only STUN discovery servers are allowed. TURN relays are disabled.");
-            busy=true;socket=new ClientWebSocket();lifetime=new CancellationTokenSource(TimeSpan.FromHours(1));
+            busy=true;lifetime=new CancellationTokenSource(TimeSpan.FromHours(1));
             sessionId=Guid.NewGuid().ToString("N");
             connect.Enabled=false;mode.Enabled=false;email.Enabled=false;token.Enabled=false;stop.Enabled=true;status.Text="Preparing secure P2P transport…";
             peer=new PeerBridge();
             peer.Message+=async message=>await HandlePeerMessage(message);
             peer.Failed+=()=>EndWithMessage("The peer transport stopped. Sharing has ended.");
             await peer.Initialize(this,lifetime.Token);
-            if(technician)socket.Options.SetRequestHeader("Authorization","Bearer "+token.Text.Trim());
-            var uri=new UriBuilder(endpoint){Query=$"role={(technician?"technician":"host")}&email={Uri.EscapeDataString(address.Address.ToLowerInvariant())}"};
+            directory=new SupabaseDirectory(config.RootElement.GetProperty("SupabaseUrl").GetString()!,config.RootElement.GetProperty("SupabasePublishableKey").GetString()!,sessionId);
+            directory.Message+=ProcessDirectoryMessage;
             status.Text="Connecting to your technician…";
-            using var deadline=CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);deadline.CancelAfter(TimeSpan.FromSeconds(15));
-            await socket.ConnectAsync(uri.Uri,deadline.Token);
-            await Receive(lifetime.Token);
+            await directory.Run(technician,address.Address.ToLowerInvariant(),token.Text,lifetime.Token);
         } catch(WebView2RuntimeNotFoundException) {
             status.Text="Microsoft Edge WebView2 Runtime is required. Install it from Microsoft's official WebView2 download page.";
-        } catch(Exception e) when(e is WebSocketException or OperationCanceledException or IOException or JsonException or InvalidOperationException or FormatException or KeyNotFoundException or TimeoutException or System.Runtime.InteropServices.ExternalException or ArgumentException) {
-            if(lifetime?.IsCancellationRequested!=true)status.Text=e is InvalidOperationException?e.Message:"Connection ended or unavailable. Check the signaling service and technician details.";
+        } catch(Exception e) when(e is HttpRequestException or OperationCanceledException or IOException or JsonException or InvalidOperationException or FormatException or KeyNotFoundException or TimeoutException or System.Runtime.InteropServices.ExternalException or ArgumentException) {
+            if(lifetime?.IsCancellationRequested!=true)status.Text=e is InvalidOperationException?e.Message:"Connection ended or unavailable. Check the Supabase directory and technician details.";
         } finally {busy=false;Disconnect(false);lifetime?.Dispose();lifetime=null;}
     }
-    async Task Receive(CancellationToken ct) {
-        var buffer=new byte[32768];
-        while(socket?.State==WebSocketState.Open) {
-            using var data=new MemoryStream();WebSocketReceiveResult part;
-            do {
-                part=await socket.ReceiveAsync(new ArraySegment<byte>(buffer),ct);
-                if(part.MessageType==WebSocketMessageType.Close){EndWithMessage("Session ended. Your computer is no longer shared.");return;}
-                if(part.MessageType!=WebSocketMessageType.Text || data.Length+part.Count>buffer.Length)throw new IOException("Invalid signaling message.");
-                data.Write(buffer,0,part.Count);
-            }while(!part.EndOfMessage);
-            using var json=JsonDocument.Parse(data.ToArray());var root=json.RootElement;var type=root.GetProperty("type").GetString();
-            if(root.TryGetProperty("message",out var message))status.Text=message.GetString();
-            if(type=="error")return;
-            if(type=="request"){accept.Visible=true;accept.Enabled=true;}
-            else if(type=="negotiate") {
-                if(negotiating)throw new IOException("Duplicate connection request.");
-                negotiating=true;negotiationStarted=DateTime.UtcNow;accept.Visible=false;
-                status.Text="Establishing a direct, encrypted P2P connection…";
-                heartbeat.Start();
-                PostPeer(new {type="start",id=sessionId,role=technician?"technician":"host",stunUrls});
-            }else if(type is "offer" or "answer" or "candidate") {
-                if(!negotiating)throw new IOException("Unexpected signaling message.");
-                PostPeer(new {type="signal",id=sessionId,signal=root.Clone()});
-            }
+    void ProcessDirectoryMessage(JsonElement root) {
+        var type=root.GetProperty("type").GetString();
+        if(root.TryGetProperty("message",out var message))status.Text=message.GetString();
+        if(type=="ended"){EndWithMessage(message.GetString()??"Session ended.");return;}
+        if(type=="request"){accept.Visible=true;accept.Enabled=true;}
+        else if(type=="negotiate") {
+            if(negotiating)throw new IOException("Duplicate connection request.");
+            negotiating=true;negotiationStarted=DateTime.UtcNow;accept.Visible=false;
+            status.Text="Establishing a direct, encrypted P2P connection…";
+            heartbeat.Start();
+            PostPeer(new {type="start",id=sessionId,role=technician?"technician":"host",stunUrls});
+        }else if(type is "offer" or "answer" or "candidate") {
+            if(!negotiating)throw new IOException("Unexpected connection data.");
+            PostPeer(new {type="signal",id=sessionId,signal=root.Clone()});
         }
     }
     async Task HandlePeerMessage(JsonElement message) {
@@ -214,12 +198,17 @@ internal sealed class MainWindow : Form {
         }
     }
 
+    static async Task CloseDirectory(SupabaseDirectory oldDirectory) {
+        try {await oldDirectory.Stop();}finally{oldDirectory.Dispose();}
+    }
     void Disconnect(bool updateStatus=true) {
         active=false;negotiating=false;framePending=false;TopMost=false;heartbeat.Stop();
         var bridge=peer;peer=null;
-        try {bridge?.Post(new {type="close",id=sessionId});}catch(Exception e) when(e is InvalidOperationException or ObjectDisposedException or System.Runtime.InteropServices.COMException) { /* Continue closing native capture and sockets. */ }
+        try {bridge?.Post(new {type="close",id=sessionId});}catch(Exception e) when(e is InvalidOperationException or ObjectDisposedException or System.Runtime.InteropServices.COMException) { /* Continue closing native capture and the directory session. */ }
         sessionId="";
-        lifetime?.Cancel();socket?.Abort();socket?.Dispose();socket=null;
+        lifetime?.Cancel();
+        var oldDirectory=directory;directory=null;
+        if(oldDirectory is not null){oldDirectory.Message-=ProcessDirectoryMessage;_=CloseDirectory(oldDirectory);}
         bridge?.Dispose();
         NativeInput.ReleaseAll();
         var old=viewer;viewer=null;if(old is not null){old.Controls.Remove(screen);old.Close();old.Dispose();}

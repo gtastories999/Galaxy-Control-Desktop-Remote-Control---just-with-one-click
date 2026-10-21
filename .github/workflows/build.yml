@@ -3,7 +3,7 @@ on: [push, pull_request, workflow_dispatch]
 permissions:
   contents: read
 jobs:
-  signaling-and-p2p:
+  supabase-and-p2p:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -11,13 +11,12 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-      - run: dotnet build src/GalaxyControl.Signaling -c Release
-      - run: pip install websockets==15.0.1
-      - run: python3 tests/signaling.py
+      - run: dotnet run --project tests/DirectoryClient -c Release
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - run: npm ci
+      - run: npm run test:database
       - run: npx playwright install --with-deps chromium
       - run: npm test
   windows:

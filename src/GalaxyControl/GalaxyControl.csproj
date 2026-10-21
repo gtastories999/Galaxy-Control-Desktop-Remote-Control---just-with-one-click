@@ -10,6 +10,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
     <EmbeddedResource Include="Transport/*.js" />
-    <None Update="connection.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="connection.example.json" TargetPath="connection.json" CopyToOutputDirectory="PreserveNewest" Condition="!Exists('connection.local.json')" />
+    <None Update="connection.local.json" TargetPath="connection.json" CopyToOutputDirectory="PreserveNewest" Condition="Exists('connection.local.json')" />
   </ItemGroup>
 </Project>
