@@ -100,38 +100,38 @@ internal sealed class MainWindow : Form {
     public MainWindow() {
         AutoScaleDimensions=new SizeF(96,96);AutoScaleMode=AutoScaleMode.Dpi;
         Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-        Text="Galaxy Control"; ClientSize=new Size(600,800); FormBorderStyle=FormBorderStyle.FixedSingle; MaximizeBox=false;
+        Text="Galaxy Control"; ClientSize=new Size(600,724);AutoScroll=true;AutoScrollMinSize=ClientSize; FormBorderStyle=FormBorderStyle.FixedSingle; MaximizeBox=false;
         AutoScaleMode=AutoScaleMode.Dpi; BackColor=Color.FromArgb(247,248,245); ForeColor=Color.FromArgb(31,36,32);
         Font=new Font("Segoe UI",11); StartPosition=FormStartPosition.CenterScreen;
         var brand=new Label {Text="Galaxy Control",Font=new Font("Segoe UI",21,FontStyle.Bold),Bounds=new Rectangle(112,37,390,40)};
         var brandNote=new Label {Text="A little help. A world closer.",Bounds=new Rectangle(114,80,390,25),ForeColor=Color.FromArgb(112,118,108),Font=new Font("Segoe UI",10)};
         Controls.Add(new GalaxyLogo {Bounds=new Rectangle(26,22,84,84)}); Controls.AddRange([brand,brandNote]);
-        var card=new Surface {Bounds=new Rectangle(28,132,544,590)};Controls.Add(card);
+        var card=new Surface {Bounds=new Rectangle(28,132,544,528)};Controls.Add(card);
         Label Copy(string text,int y,int height,int size=10,bool bold=false) {
             var label=new Label {Text=text,Bounds=new Rectangle(30,y,480,height),BackColor=Color.White,Font=new Font("Segoe UI",size,bold?FontStyle.Bold:FontStyle.Regular),ForeColor=bold?Color.FromArgb(31,36,32):Color.FromArgb(106,113,104)};
             card.Controls.Add(label);return label;
         }
         var title=Copy("Good help starts here.",27,42,24,true);
         var subtitle=Copy("Your technician is just one connection away.",75,30,11);
-        Copy("HOW WOULD YOU LIKE TO CONNECT?",122,24,9,true);
-        mode.Items.AddRange(["Get help","I'm a technician"]);mode.SelectedIndex=0;mode.SetBounds(30,153,480,34);mode.Font=new Font("Segoe UI",11);
+        Copy("HOW WOULD YOU LIKE TO CONNECT?",109,24,9,true);
+        mode.Items.AddRange(["Get help","I'm a technician"]);mode.SelectedIndex=0;mode.SetBounds(30,140,480,34);mode.Font=new Font("Segoe UI",11);
         mode.Name="connectionMode";mode.AccessibleName="Connection mode";mode.TabIndex=0;mode.IntegralHeight=false;mode.DropDownHeight=100;
         card.Controls.Add(mode);
-        var emailLabel=Copy("Technician email",207,24,10,true);
+        var emailLabel=Copy("Technician email",184,24,10,true);
         void Field(TextBox field,int y) {
             var border=new InputSurface {Bounds=new Rectangle(30,y,480,50)};
             field.BorderStyle=BorderStyle.None;field.BackColor=border.BackColor;field.Dock=DockStyle.Fill;border.Controls.Add(field);card.Controls.Add(border);
         }
-        email.PlaceholderText="technician@example.com";Field(email,236);
+        email.PlaceholderText="technician@example.com";Field(email,211);
         email.Name="technicianEmail";email.AccessibleName="Technician email";email.TabIndex=1;
         token.Name="technicianPassword";token.AccessibleName="Technician password";token.TabIndex=2;
-        token.PlaceholderText="Your password";Field(token,296);token.Parent!.Visible=false;
+        token.PlaceholderText="Your password";Field(token,271);token.Parent!.Visible=false;
         var consent=Copy("Your technician can view your screen and control your mouse and keyboard. You can stop sharing at any time.",304,72,10);
         title.Name="modeTitle";subtitle.Name="modeSubtitle";emailLabel.Name="emailLabel";consent.Name="modeHint";
         connect.Name="connectButton";stop.Name="stopButton";accept.Name="acceptButton";connect.TabIndex=3;stop.TabIndex=4;accept.TabIndex=5;
-        connect.SetBounds(30,414,480,54);stop.SetBounds(30,482,232,44);accept.SetBounds(274,482,236,44);
+        connect.SetBounds(30,390,480,54);stop.SetBounds(30,458,232,44);accept.SetBounds(274,458,236,44);
         card.Controls.AddRange([connect,stop,accept]);
-        status.Name="connectionStatus";status.AccessibleName="Connection status";status.SetBounds(58,738,484,48);status.ForeColor=Color.FromArgb(106,113,104);status.Font=new Font("Segoe UI",9);status.Text="Ready when you are. You stay in control.";Controls.Add(status);
+        status.Name="connectionStatus";status.AccessibleName="Connection status";status.SetBounds(58,678,484,38);status.ForeColor=Color.FromArgb(106,113,104);status.Font=new Font("Segoe UI",9);status.Text="Ready when you are. You stay in control.";Controls.Add(status);
         void UpdateMode() {
             bool tech=mode.SelectedIndex==1;token.Parent!.Visible=tech;
             title.Text=tech?"Your support desk.":"Good help starts here.";
