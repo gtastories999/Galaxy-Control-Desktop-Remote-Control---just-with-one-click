@@ -21,11 +21,13 @@ internal sealed class PeerBridge : IDisposable {
         cancellationToken.ThrowIfCancellationRequested();
         var core = view.CoreWebView2;
         core.Settings.AreHostObjectsAllowed = false;
+        core.Settings.IsWebMessageEnabled = true;
+        core.Settings.IsScriptEnabled = true;
         core.Settings.AreDevToolsEnabled = false;
         core.Settings.AreDefaultContextMenusEnabled = false;
         core.Settings.AreDefaultScriptDialogsEnabled = false;
         core.Settings.IsStatusBarEnabled = false;
-        core.NavigationStarting += (_, e) => { if (e.Uri != "about:blank") e.Cancel = true; };
+        core.NavigationStarting += (_, e) => { if (e.Uri != "about:blank") { Console.WriteLine("Blocked transport navigation: " + e.Uri); e.Cancel = true; } };
         core.NewWindowRequested += (_, e) => e.Handled = true;
         core.DownloadStarting += (_, e) => e.Cancel = true;
         core.PermissionRequested += (_, e) => e.State = CoreWebView2PermissionState.Deny;
@@ -42,12 +44,18 @@ internal sealed class PeerBridge : IDisposable {
                 else Message?.Invoke(message.Clone());
             } catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException) { Failed?.Invoke(); }
         };
-        core.NavigationCompleted += async (_, e) => {
-            if (!e.IsSuccess) ready.TrySetException(new IOException("Local transport navigation failed: " + e.WebErrorStatus));
-            if (!ready.Task.IsCompleted) Console.WriteLine("Transport bootstrap state: " + await core.ExecuteScriptAsync("JSON.stringify({url:location.href,peer:typeof GalaxyPeer,bridge:typeof chrome?.webview})"));
+        var navigated = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        core.NavigationCompleted += (_, e) => {
+            if (e.IsSuccess) navigated.TrySetResult();
+            else if (e.WebErrorStatus != CoreWebView2WebErrorStatus.OperationCanceled)
+                navigated.TrySetException(new IOException("Local transport navigation failed: " + e.WebErrorStatus));
         };
+        // Initialize an empty local document before injecting the bundled transport. This avoids
+        // racing inline script execution against WebView2's initial navigation.
+        core.Navigate("about:blank");
+        await navigated.Task.WaitAsync(TimeSpan.FromSeconds(20), cancellationToken);
         var script = "window.addEventListener('error', event => chrome.webview.postMessage({type:'bootstrap-error',message:event.message}));\n" + ReadResource("peer.js") + "\n" + ReadResource("bridge.js");
-        core.NavigateToString("<!doctype html><meta charset='utf-8'><title>Galaxy Control transport</title><script>" + script + "</script>");
+        await core.ExecuteScriptAsync(script);
         await ready.Task.WaitAsync(TimeSpan.FromSeconds(20), cancellationToken);
         view.Visible = false;
     }
