@@ -46,6 +46,7 @@ internal static class Program {
         mode.SelectedIndex=1;Application.DoEvents();
         Require(password.Visible&&password.UseSystemPasswordChar,"Technician view must expose a masked password.");
         Require(hint.Text.Contains("verified technician account")&&!hint.Text.Contains("view your screen"),"Technician hint must describe account sign-in, not screen sharing.");
+        Require(Find<Control>("registerButton").Visible,"New technicians must be able to register inside the app.");
         Require(connect.Text=="Sign in & go online"&&Find<Control>("stopButton").Text=="Go offline","Technician actions must match the role.");
         Require(hint.Bottom<=connect.Top,"Role explanation must not overlap the primary action.");
         Require(password.Parent!.Bottom<=hint.Top,$"Password and explanation must not overlap at {scale*100}%. Password bottom={password.Parent.Bottom}, hint top={hint.Top}.");

@@ -43,13 +43,13 @@ internal class RoundedButton : Control, IButtonControl {
         var g=e.Graphics;g.SmoothingMode=SmoothingMode.AntiAlias;
         using var path=Shape(new RectangleF(1,1,Width-3,Height-3),14);
         using var fill=new LinearGradientBrush(ClientRectangle,
-            !Enabled?Color.FromArgb(239,239,235):Gold?Color.FromArgb(255,231,119):Hovered?Color.FromArgb(247,245,236):Color.White,
-            !Enabled?Color.FromArgb(232,232,227):Gold?Color.FromArgb(232,178,47):Color.FromArgb(250,250,247),35);
+            !Enabled?Color.FromArgb(239,239,239):Hovered?Color.FromArgb(255,239,154):Color.FromArgb(255,231,119),
+            !Enabled?Color.FromArgb(232,232,232):Color.FromArgb(232,178,47),35);
         g.FillPath(fill,path);
         // Use the same alpha-aware renderer for the label and button surface.
         // GDI text drawing can ignore the managed clip on rounded, buffered controls.
         g.TextRenderingHint=System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
-        using var textBrush=new SolidBrush(Enabled?Color.FromArgb(44,40,28):Color.FromArgb(143,144,136));
+        using var textBrush=new SolidBrush(Enabled?Color.FromArgb(44,40,28):Color.FromArgb(143,143,143));
         using var format=new StringFormat {Alignment=StringAlignment.Center,LineAlignment=StringAlignment.Center,HotkeyPrefix=System.Drawing.Text.HotkeyPrefix.None};
         g.DrawString(Text,Font,textBrush,ClientRectangle,format);
         if(Focused){using var focus=new Pen(Color.FromArgb(135,101,24));focus.DashStyle=DashStyle.Dot;using var inner=Shape(new RectangleF(5,5,Width-11,Height-11),10);g.DrawPath(focus,inner);}
@@ -58,22 +58,22 @@ internal class RoundedButton : Control, IButtonControl {
 internal sealed class GoldButton : RoundedButton { public GoldButton(){Gold=true;} }
 internal sealed class Surface : Panel {
     public Surface(){DoubleBuffered=true;BackColor=Color.White;}
-    protected override void OnPaintBackground(PaintEventArgs e){e.Graphics.Clear(Parent?.BackColor??Color.FromArgb(247,248,245));}
+    protected override void OnPaintBackground(PaintEventArgs e){e.Graphics.Clear(Parent?.BackColor??Color.FromArgb(248,248,248));}
     protected override void OnPaint(PaintEventArgs e){
         e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;
         using var shadow=RoundedButton.Shape(new RectangleF(2,5,Width-5,Height-7),24);
-        using var shade=new SolidBrush(Color.FromArgb(232,234,227));e.Graphics.FillPath(shade,shadow);
+        using var shade=new SolidBrush(Color.FromArgb(233,233,233));e.Graphics.FillPath(shade,shadow);
         using var shape=RoundedButton.Shape(new RectangleF(1,1,Width-5,Height-8),24);
-        e.Graphics.FillPath(Brushes.White,shape);using var line=new Pen(Color.FromArgb(232,234,227));e.Graphics.DrawPath(line,shape);
+        e.Graphics.FillPath(Brushes.White,shape);using var line=new Pen(Color.FromArgb(233,233,233));e.Graphics.DrawPath(line,shape);
     }
 }
 internal sealed class InputSurface : Panel {
-    public InputSurface(){DoubleBuffered=true;BackColor=Color.FromArgb(248,249,246);Padding=new Padding(15,13,15,10);}
+    public InputSurface(){DoubleBuffered=true;BackColor=Color.FromArgb(249,249,249);Padding=new Padding(15,13,15,10);}
     protected override void OnPaintBackground(PaintEventArgs e) {
         e.Graphics.Clear(Parent?.BackColor??Color.White);e.Graphics.SmoothingMode=SmoothingMode.AntiAlias;
         using var path=RoundedButton.Shape(new RectangleF(1,1,Width-3,Height-3),12);
         using var fill=new SolidBrush(BackColor);e.Graphics.FillPath(fill,path);
-        using var edge=new Pen(ContainsFocus?Color.FromArgb(200,151,35):Color.FromArgb(224,228,220),ContainsFocus?2:1);e.Graphics.DrawPath(edge,path);
+        using var edge=new Pen(ContainsFocus?Color.FromArgb(200,151,35):Color.FromArgb(226,226,226),ContainsFocus?2:1);e.Graphics.DrawPath(edge,path);
     }
     protected override void OnControlAdded(ControlEventArgs e){
         base.OnControlAdded(e);
@@ -100,6 +100,7 @@ internal sealed class MainWindow : Form {
     readonly ComboBox mode=new(){DropDownStyle=ComboBoxStyle.DropDownList};
     readonly Label status=new(){AutoSize=false};
     readonly RoundedButton supabaseSetup=new(){Text="Connect Supabase",Visible=false};
+    readonly RoundedButton register=new(){Text="Create technician account",Visible=false};
     readonly GoldButton connect=new(){Text="Connect to technician"};
     readonly RoundedButton stop=new(){Text="Stop sharing",Enabled=false}, accept=new(){Text="Accept support request",Visible=false};
     readonly PictureBox screen=new(){Dock=DockStyle.Fill,SizeMode=PictureBoxSizeMode.Zoom,BackColor=Color.FromArgb(24,26,32),TabStop=true};
@@ -116,15 +117,15 @@ internal sealed class MainWindow : Form {
     public MainWindow() {
         AutoScaleDimensions=new SizeF(96,96);AutoScaleMode=AutoScaleMode.Dpi;
         Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-        Text="Galaxy Control"; ClientSize=new Size(600,724);AutoScroll=true;AutoScrollMinSize=ClientSize; FormBorderStyle=FormBorderStyle.FixedSingle; MaximizeBox=false;
-        AutoScaleMode=AutoScaleMode.Dpi; BackColor=Color.FromArgb(247,248,245); ForeColor=Color.FromArgb(31,36,32);
+        Text="Galaxy Control"; ClientSize=new Size(600,786);AutoScroll=true;AutoScrollMinSize=ClientSize; FormBorderStyle=FormBorderStyle.FixedSingle; MaximizeBox=false;
+        AutoScaleMode=AutoScaleMode.Dpi; BackColor=Color.FromArgb(248,248,248); ForeColor=Color.FromArgb(34,34,34);
         Font=new Font("Segoe UI",11); StartPosition=FormStartPosition.CenterScreen;
         var brand=new Label {Text="Galaxy Control",Font=new Font("Segoe UI",21,FontStyle.Bold),Bounds=new Rectangle(112,37,390,40)};
-        var brandNote=new Label {Text="A little help. A world closer.",Bounds=new Rectangle(114,80,390,25),ForeColor=Color.FromArgb(112,118,108),Font=new Font("Segoe UI",10)};
+        var brandNote=new Label {Text="A little help. A world closer.",Bounds=new Rectangle(114,80,390,25),ForeColor=Color.FromArgb(112,112,112),Font=new Font("Segoe UI",10)};
         Controls.Add(new GalaxyLogo {Bounds=new Rectangle(26,22,84,84)}); Controls.AddRange([brand,brandNote]);
-        var card=new Surface {Bounds=new Rectangle(28,132,544,528)};Controls.Add(card);
+        var card=new Surface {Bounds=new Rectangle(28,132,544,586)};Controls.Add(card);
         Label Copy(string text,int y,int height,int size=10,bool bold=false) {
-            var label=new Label {Text=text,Bounds=new Rectangle(30,y,480,height),BackColor=Color.White,Font=new Font("Segoe UI",size,bold?FontStyle.Bold:FontStyle.Regular),ForeColor=bold?Color.FromArgb(31,36,32):Color.FromArgb(106,113,104)};
+            var label=new Label {Text=text,Bounds=new Rectangle(30,y,480,height),BackColor=Color.White,Font=new Font("Segoe UI",size,bold?FontStyle.Bold:FontStyle.Regular),ForeColor=bold?Color.FromArgb(34,34,34):Color.FromArgb(106,106,106)};
             card.Controls.Add(label);return label;
         }
         var title=Copy("Good help starts here.",27,42,24,true);
@@ -147,11 +148,13 @@ internal sealed class MainWindow : Form {
         connect.Name="connectButton";stop.Name="stopButton";accept.Name="acceptButton";connect.TabIndex=3;stop.TabIndex=4;accept.TabIndex=5;
         connect.SetBounds(30,390,480,54);stop.SetBounds(30,458,232,44);accept.SetBounds(274,458,236,44);
         supabaseSetup.Name="supabaseSetupButton";supabaseSetup.TabIndex=6;supabaseSetup.SetBounds(274,458,236,44);
-        card.Controls.AddRange([connect,stop,accept,supabaseSetup]);
+        register.Name="registerButton";register.TabIndex=7;register.SetBounds(30,516,480,44);
+        card.Controls.AddRange([connect,stop,accept,supabaseSetup,register]);
+        register.Click+=async(_,_)=>await RegisterTechnician();
         supabaseSetup.Click+=(_,_)=>{using var setup=new SupabaseSetupWindow(email.Text,token.Text);setup.ShowDialog(this);if(setup.Configured){email.Text=setup.TechnicianEmail;token.Text=setup.TechnicianPassword;status.Text="Supabase configured. Confirm your email if needed, then sign in.";}};
-        status.Name="connectionStatus";status.AccessibleName="Connection status";status.SetBounds(58,678,484,38);status.ForeColor=Color.FromArgb(106,113,104);status.Font=new Font("Segoe UI",9);status.Text="Ready when you are. You stay in control.";Controls.Add(status);
+        status.Name="connectionStatus";status.AccessibleName="Connection status";status.SetBounds(58,736,484,42);status.ForeColor=Color.FromArgb(106,106,106);status.Font=new Font("Segoe UI",9);status.Text="Ready when you are. You stay in control.";Controls.Add(status);
         void UpdateMode() {
-            bool tech=mode.SelectedIndex==1;token.Parent!.Visible=tech;supabaseSetup.Visible=tech&&!busy;
+            bool tech=mode.SelectedIndex==1;token.Parent!.Visible=tech;supabaseSetup.Visible=tech&&!busy;register.Visible=tech&&!busy;
             title.Text=tech?"Your support desk.":"Good help starts here.";
             subtitle.Text=tech?"Sign in to receive and accept support requests.":"Your technician is just one connection away.";
             emailLabel.Text=tech?"Your technician email":"Technician email";
@@ -162,7 +165,7 @@ internal sealed class MainWindow : Form {
             consent.Text=tech?"Sign in with your verified technician account. You choose which support requests to accept.":"Your technician can view your screen and control your mouse and keyboard. You can stop sharing at any time.";
             connect.Text=tech?"Sign in & go online":"Connect to technician";
             stop.Text=tech?"Go offline":"Stop sharing";
-            if(!busy)status.Text=tech?"Use the account created during technician setup.":"Ready when you are. You stay in control.";
+            if(!busy)status.Text=tech?"New here? Choose Create technician account. No separate setup page is needed.":"Ready when you are. You stay in control.";
         }
         mode.SelectedIndexChanged+=(_,_)=>UpdateMode();UpdateMode();
         AcceptButton=connect;ActiveControl=email;
@@ -210,6 +213,21 @@ internal sealed class MainWindow : Form {
             if(busy && lifetime?.IsCancellationRequested!=true)EndWithMessage("Directory disconnected. Sharing has ended.");
         }
     }
+    async Task RegisterTechnician() {
+        if(busy)return;
+        try {
+            ConnectionSettings settings;
+            try {
+                settings=JsonSerializer.Deserialize<ConnectionSettings>(File.ReadAllText(ConnectionStore.CurrentPath))??throw new InvalidOperationException("Project configuration is missing.");settings.Validate();
+            }catch(Exception e) when(e is IOException or JsonException or InvalidOperationException){
+                using var setup=new SupabaseSetupWindow(email.Text,token.Text);setup.ShowDialog(this);
+                if(setup.Configured){email.Text=setup.TechnicianEmail;token.Text=setup.TechnicianPassword;status.Text="Project connected. Confirm your email, then sign in. You can reopen Create technician account to resend confirmation.";}
+                return;
+            }
+            using var registration=new TechnicianRegistrationWindow(settings,email.Text,token.Text);
+            if(registration.ShowDialog(this)==DialogResult.OK){email.Text=registration.TechnicianEmail;token.Text=registration.TechnicianPassword;await Connect();}
+        }catch(Exception e) when(e is HttpRequestException or IOException or JsonException or InvalidOperationException){status.Text="Account setup could not open. Check this distribution's Supabase configuration.";}
+    }
     async Task Connect() {
         if(busy)return;
         if(!System.Net.Mail.MailAddress.TryCreate(email.Text.Trim(),out var address)||address.Address!=email.Text.Trim()){status.Text=mode.SelectedIndex==1?"Please enter your valid technician email.":"Please enter a valid technician email.";return;}
@@ -220,9 +238,14 @@ internal sealed class MainWindow : Form {
             stunUrls=config.RootElement.GetProperty("StunUrls").EnumerateArray().Select(value=>value.GetString()??"").ToArray();
             if(stunUrls.Length>4 || stunUrls.Any(url=>!System.Text.RegularExpressions.Regex.IsMatch(url,@"^stun:[a-zA-Z0-9.-]+(?::\d+)?$")))
                 throw new InvalidOperationException("Only STUN discovery servers are allowed. TURN relays are disabled.");
-            busy=true;supabaseSetup.Visible=false;lifetime=new CancellationTokenSource(TimeSpan.FromHours(1));
+            busy=true;supabaseSetup.Visible=false;register.Visible=false;lifetime=new CancellationTokenSource(TimeSpan.FromHours(1));
             sessionId=Guid.NewGuid().ToString("N");
             connect.Enabled=false;mode.Enabled=false;email.Enabled=false;token.Enabled=false;stop.Enabled=true;status.Text="Preparing secure P2P transport…";
+            if(technician){
+                var settings=JsonSerializer.Deserialize<ConnectionSettings>(config.RootElement.GetRawText())??throw new InvalidOperationException("Project configuration is missing.");
+                using var account=new TechnicianAccount(settings);status.Text="Checking your technician account…";
+                await account.Check(address.Address,token.Text,lifetime.Token);
+            }
             peer=new PeerBridge();
             peer.Message+=async message=>await HandlePeerMessage(message);
             peer.Failed+=()=>EndWithMessage("The peer transport stopped. Sharing has ended.");
@@ -326,7 +349,7 @@ internal sealed class MainWindow : Form {
         NativeInput.ReleaseAll();
         var old=viewer;viewer=null;if(old is not null){old.Controls.Remove(screen);old.Close();old.Dispose();}
         screen.Image?.Dispose();screen.Image=null;
-        supabaseSetup.Visible=mode.SelectedIndex==1&&!busy;connect.Enabled=!busy;mode.Enabled=true;email.Enabled=true;token.Enabled=true;stop.Enabled=false;accept.Visible=false;
-        BackColor=Color.FromArgb(250,250,247);if(updateStatus)status.Text="Session ended. Your computer is no longer shared.";
+        supabaseSetup.Visible=mode.SelectedIndex==1&&!busy;register.Visible=mode.SelectedIndex==1&&!busy;connect.Enabled=!busy;mode.Enabled=true;email.Enabled=true;token.Enabled=true;stop.Enabled=false;accept.Visible=false;
+        BackColor=Color.FromArgb(250,250,250);if(updateStatus)status.Text="Session ended. Your computer is no longer shared.";
     }
 }

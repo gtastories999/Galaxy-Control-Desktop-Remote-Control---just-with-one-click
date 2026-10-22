@@ -4,7 +4,7 @@ Minimal, attended Windows remote support: **enter the technician's email → con
 
 ## How it works
 
-1. The technician chooses **I'm a technician**, enters their verified email and technician account password, and goes online. Their app registers that email in the operator's Supabase database.
+1. The technician chooses **I'm a technician**. New users click **Create technician account**, register inside the app, confirm the email, and choose **Check confirmation & go online**. Existing users sign in with their verified email and password. Their app registers that email in the operator's Supabase database.
 2. The customer opens the app, enters only that email and clicks **Connect to technician**. IP addresses and ports are handled in the background; no customer registration screen is shown.
 3. The technician accepts. The apps exchange session-specific WebRTC addresses through Supabase and establish **direct, encrypted P2P** screen and control channels. Supabase updates the technician's email/IP/port mapping as actual ICE endpoints are gathered.
 4. **Stop sharing**, closing either app or a connection failure ends control and releases held keys. There is no unattended access or automatic reconnection.
