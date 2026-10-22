@@ -117,13 +117,13 @@ internal sealed class MainWindow : Form {
     public MainWindow() {
         AutoScaleDimensions=new SizeF(96,96);AutoScaleMode=AutoScaleMode.Dpi;
         Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-        Text="Galaxy Control"; ClientSize=new Size(600,786);AutoScroll=true;AutoScrollMinSize=ClientSize; FormBorderStyle=FormBorderStyle.FixedSingle; MaximizeBox=false;
+        Text="Galaxy Control"; ClientSize=new Size(600,724);AutoScroll=true;AutoScrollMinSize=ClientSize; FormBorderStyle=FormBorderStyle.FixedSingle; MaximizeBox=false;
         AutoScaleMode=AutoScaleMode.Dpi; BackColor=Color.FromArgb(248,248,248); ForeColor=Color.FromArgb(34,34,34);
         Font=new Font("Segoe UI",11); StartPosition=FormStartPosition.CenterScreen;
         var brand=new Label {Text="Galaxy Control",Font=new Font("Segoe UI",21,FontStyle.Bold),Bounds=new Rectangle(112,37,390,40)};
         var brandNote=new Label {Text="A little help. A world closer.",Bounds=new Rectangle(114,80,390,25),ForeColor=Color.FromArgb(112,112,112),Font=new Font("Segoe UI",10)};
         Controls.Add(new GalaxyLogo {Bounds=new Rectangle(26,22,84,84)}); Controls.AddRange([brand,brandNote]);
-        var card=new Surface {Bounds=new Rectangle(28,132,544,586)};Controls.Add(card);
+        var card=new Surface {Bounds=new Rectangle(28,132,544,528)};Controls.Add(card);
         Label Copy(string text,int y,int height,int size=10,bool bold=false) {
             var label=new Label {Text=text,Bounds=new Rectangle(30,y,480,height),BackColor=Color.White,Font=new Font("Segoe UI",size,bold?FontStyle.Bold:FontStyle.Regular),ForeColor=bold?Color.FromArgb(34,34,34):Color.FromArgb(106,106,106)};
             card.Controls.Add(label);return label;
@@ -148,13 +148,13 @@ internal sealed class MainWindow : Form {
         connect.Name="connectButton";stop.Name="stopButton";accept.Name="acceptButton";connect.TabIndex=3;stop.TabIndex=4;accept.TabIndex=5;
         connect.SetBounds(30,390,480,54);stop.SetBounds(30,458,232,44);accept.SetBounds(274,458,236,44);
         supabaseSetup.Name="supabaseSetupButton";supabaseSetup.TabIndex=6;supabaseSetup.SetBounds(274,458,236,44);
-        register.Name="registerButton";register.TabIndex=7;register.SetBounds(30,516,480,44);
+        register.Name="registerButton";register.TabIndex=7;register.SetBounds(30,458,232,44);
         card.Controls.AddRange([connect,stop,accept,supabaseSetup,register]);
         register.Click+=async(_,_)=>await RegisterTechnician();
         supabaseSetup.Click+=async(_,_)=>await SetUpSupabase();
-        status.Name="connectionStatus";status.AccessibleName="Connection status";status.SetBounds(58,736,484,42);status.ForeColor=Color.FromArgb(106,106,106);status.Font=new Font("Segoe UI",9);status.Text="Ready when you are. You stay in control.";Controls.Add(status);
+        status.Name="connectionStatus";status.AccessibleName="Connection status";status.SetBounds(58,678,484,38);status.ForeColor=Color.FromArgb(106,106,106);status.Font=new Font("Segoe UI",9);status.Text="Ready when you are. You stay in control.";Controls.Add(status);
         void UpdateMode() {
-            bool tech=mode.SelectedIndex==1;token.Parent!.Visible=tech;supabaseSetup.Visible=tech&&!busy;register.Visible=tech&&!busy;
+            bool tech=mode.SelectedIndex==1;token.Parent!.Visible=tech;supabaseSetup.Visible=tech&&!busy;register.Visible=tech&&!busy;stop.Visible=!tech||busy;
             title.Text=tech?"Your support desk.":"Good help starts here.";
             subtitle.Text=tech?"Sign in to receive and accept support requests.":"Your technician is just one connection away.";
             emailLabel.Text=tech?"Your technician email":"Technician email";
@@ -252,7 +252,7 @@ internal sealed class MainWindow : Form {
                 throw new InvalidOperationException("Only STUN discovery servers are allowed. TURN relays are disabled.");
             busy=true;supabaseSetup.Visible=false;register.Visible=false;lifetime=new CancellationTokenSource(TimeSpan.FromHours(1));
             sessionId=Guid.NewGuid().ToString("N");
-            connect.Enabled=false;mode.Enabled=false;email.Enabled=false;token.Enabled=false;stop.Enabled=true;status.Text="Preparing secure P2P transport…";
+            connect.Enabled=false;mode.Enabled=false;email.Enabled=false;token.Enabled=false;stop.Enabled=true;stop.Visible=true;status.Text="Preparing secure P2P transport…";
             if(technician){
                 var settings=JsonSerializer.Deserialize<ConnectionSettings>(config.RootElement.GetRawText())??throw new InvalidOperationException("Project configuration is missing.");
                 using var account=new TechnicianAccount(settings);status.Text="Checking your technician account…";
@@ -361,7 +361,7 @@ internal sealed class MainWindow : Form {
         NativeInput.ReleaseAll();
         var old=viewer;viewer=null;if(old is not null){old.Controls.Remove(screen);old.Close();old.Dispose();}
         screen.Image?.Dispose();screen.Image=null;
-        supabaseSetup.Visible=mode.SelectedIndex==1&&!busy;register.Visible=mode.SelectedIndex==1&&!busy;connect.Enabled=!busy;mode.Enabled=true;email.Enabled=true;token.Enabled=true;stop.Enabled=false;accept.Visible=false;
+        supabaseSetup.Visible=mode.SelectedIndex==1&&!busy;register.Visible=mode.SelectedIndex==1&&!busy;stop.Visible=mode.SelectedIndex!=1||busy;connect.Enabled=!busy;mode.Enabled=true;email.Enabled=true;token.Enabled=true;stop.Enabled=false;accept.Visible=false;
         BackColor=Color.FromArgb(250,250,250);if(updateStatus)status.Text="Session ended. Your computer is no longer shared.";
     }
 }
