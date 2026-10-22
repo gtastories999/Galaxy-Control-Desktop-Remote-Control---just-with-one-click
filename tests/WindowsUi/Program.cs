@@ -15,6 +15,7 @@ internal static class Program {
                 Require(Descendants(setup).Any(c=>c.Visible&&c.Text=="Connect Supabase"),"Automatic setup must expose the account connection action.");
                 Snapshot(setup,"supabase-account-setup");setup.Close();
             }
+            VerifyLoginSetup();
             var assembly=Assembly.Load("GalaxyControl");
             var settings=Activator.CreateInstance(assembly.GetType("GalaxyControl.ConnectionSettings",true)!,new object[]{"https://example.supabase.co","sb_publishable_test_only_not_real",Array.Empty<string>()})!;
             foreach(var pending in new[]{false,true}){
@@ -26,6 +27,26 @@ internal static class Program {
             }
             Console.WriteLine("PASS: actual Windows UI, visible native role selector, role-specific copy, transparent button perimeters, embedded alpha logo and 100/125/150/200% layout snapshots.");
         }catch(Exception e){Console.Error.WriteLine(e);Environment.ExitCode=1;}
+    }
+    static void VerifyLoginSetup(){
+        var assembly=Assembly.Load("GalaxyControl");
+        using var window=(Form)Activator.CreateInstance(assembly.GetType("GalaxyControl.MainWindow",true)!,true)!;
+        window.Show();Application.DoEvents();
+        var controls=Descendants(window).ToArray();
+        ((ComboBox)controls.Single(c=>c.Name=="connectionMode")).SelectedIndex=1;
+        controls.Single(c=>c.Name=="technicianEmail").Text="tech@example.com";
+        controls.Single(c=>c.Name=="technicianPassword").Text="test-password";
+        bool opened=false;
+        using var closer=new System.Windows.Forms.Timer{Interval=100};
+        closer.Tick+=(_,_)=>{
+            var dialog=Application.OpenForms.Cast<Form>().FirstOrDefault(f=>f.GetType().Name=="SupabaseSetupWindow");
+            if(dialog is null)return;
+            opened=true;closer.Stop();Snapshot(dialog,"technician-login-first-run");dialog.Close();
+        };
+        closer.Start();((IButtonControl)controls.Single(c=>c.Name=="connectButton")).PerformClick();Application.DoEvents();
+        Require(opened,"A technician's first login must open in-app project setup instead of asking for configuration files.");
+        Require(controls.Single(c=>c.Name=="connectButton").Enabled,"Cancelling setup must leave sign-in usable.");
+        window.Close();
     }
     static void Require(bool condition,string message){if(!condition)throw new InvalidOperationException(message);}
     static IEnumerable<Control> Descendants(Control parent) {

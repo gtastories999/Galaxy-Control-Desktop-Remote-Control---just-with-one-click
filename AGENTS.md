@@ -11,3 +11,5 @@ Each distributor or fork must register its own Supabase Management API OAuth app
 Galaxy is the umbrella brand for all Galaxy projects. Use Gradient Yellow Gold as the brand accent in every Galaxy logo and button, including onboarding, authentication, setup, hover and focus states. Use neutral supporting surfaces and text; do not introduce green branding. Preserve this rule when adding or updating Galaxy interfaces and assets.
 
 Use the existing gold 3D star-and-orbit logo in src/GalaxyControl/Assets/galaxy-logo.png across login and setup. Do not create a replacement logo or alternate identity.
+
+Technicians must complete onboarding, registration, confirmation and sign-in inside the app. Never instruct technicians to copy configuration files or use a separate HTML setup page. Configured distributions must import and preserve public project settings automatically across updates; the public generic release remains free of operator credentials.

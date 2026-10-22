@@ -2,6 +2,9 @@ using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
 namespace GalaxyControl;
+internal sealed class TechnicianAccountException(string code,string message) : InvalidOperationException(message) {
+    public string Code {get;}=code;
+}
 internal sealed class TechnicianAccount : IDisposable {
     readonly HttpClient http;
     public TechnicianAccount(ConnectionSettings settings,HttpMessageHandler? handler=null){
@@ -13,7 +16,7 @@ internal sealed class TechnicianAccount : IDisposable {
         using var response=await http.PostAsJsonAsync(path,body,ct);
         if(!response.IsSuccessStatusCode){
             string code="";try{using var error=JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));if(error.RootElement.TryGetProperty("error_code",out var value))code=value.GetString()??"";}catch(JsonException){}
-            throw new InvalidOperationException(code switch {
+            throw new TechnicianAccountException(code,code switch {
                 "email_not_confirmed"=>"Confirm your email first, then click Check confirmation & go online.",
                 "invalid_credentials"=>"Email or password is incorrect. Use Create technician account if you are new.",
                 "signup_disabled"=>"Account registration is disabled in this distribution's Supabase project.",

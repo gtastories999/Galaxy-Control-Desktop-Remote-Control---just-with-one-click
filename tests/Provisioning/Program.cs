@@ -9,6 +9,7 @@ static class Program {
     static void Assert(bool value,string message){if(!value)throw new Exception(message);}
     static async Task Reject(Func<Task> action){try{await action();throw new Exception("Expected refusal");}catch(InvalidOperationException){}}
     static async Task Main(){
+        VerifyAutomaticConfiguration();
         await VerifyTechnicianAccount();
         var fake=new Management();using(var api=new SupabaseProvisioner("test-owner-token",fake)){
             var config=await api.Configure(Project,"TEST_INSTALL_SQL",_=>{},CancellationToken.None);
@@ -34,6 +35,26 @@ static class Program {
         if(browser is not null)await browser;
         Assert(token=="test-account-token"&&h.Exchanged,"OAuth response must be exchanged in memory with PKCE");
         Console.WriteLine("PASS: owned named project only, safe repeat install, authorization/readiness/partial-schema/permission/key failures, loopback state checks and PKCE token exchange.");
+    }
+    static void VerifyAutomaticConfiguration(){
+        var root=Path.Combine(Path.GetTempPath(),"galaxy-config-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);
+        try{
+            var installed=Path.Combine(root,"profile","connection.json");var bundled=Path.Combine(root,"download","connection.json");Directory.CreateDirectory(Path.GetDirectoryName(bundled)!);
+            var expected=new ConnectionSettings("https://example.supabase.co","sb_publishable_test_only_not_real",[]);
+            File.WriteAllText(bundled,JsonSerializer.Serialize(expected));
+            var imported=ConnectionStore.Load(installed,bundled);
+            Assert(File.Exists(installed)&&imported.SupabaseUrl==expected.SupabaseUrl,"First launch must save the developer's public connection automatically");
+            File.Delete(bundled);
+            Assert(ConnectionStore.Load(installed,bundled).SupabasePublishableKey==expected.SupabasePublishableKey,"An update in a different folder must work without copying configuration");
+            File.WriteAllText(bundled,JsonSerializer.Serialize(new ConnectionSettings("https://other.supabase.co","sb_publishable_other_distribution",[])));
+            Assert(ConnectionStore.Load(installed,bundled).SupabaseUrl==expected.SupabaseUrl,"An update must preserve the technician's selected project");
+            File.WriteAllText(installed,"broken JSON");
+            Assert(ConnectionStore.Load(installed,bundled).SupabaseUrl=="https://other.supabase.co","A corrupt cache may recover from the configured distribution");
+            File.WriteAllText(installed,"{}");File.WriteAllText(bundled,JsonSerializer.Serialize(expected with {SupabasePublishableKey="sb_secret_never_import"}));
+            try{ConnectionStore.Load(installed,bundled);throw new Exception("Secret config imported");}catch(InvalidOperationException){}
+            Assert(!File.ReadAllText(installed).Contains("sb_secret_"),"Only validated public settings may be persisted");
+            Console.WriteLine("PASS: automatic first launch, update without copied files, existing project preservation, corrupt-cache recovery and secret-key refusal.");
+        }finally{Directory.Delete(root,true);}
     }
     static async Task VerifyTechnicianAccount(){
         var transport=new AccountTransport();

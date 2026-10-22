@@ -62,7 +62,7 @@ internal sealed class SupabaseSetupWindow : Form {
             using var stream=typeof(SupabaseSetupWindow).Assembly.GetManifestResourceStream("GalaxyControl.Setup.schema.sql")??throw new IOException("The setup schema is missing.");
             using var reader=new StreamReader(stream);var schema=await reader.ReadToEndAsync(lifetime.Token);
             ConnectionSettings? previous=null;
-            try{previous=JsonSerializer.Deserialize<ConnectionSettings>(File.ReadAllText(ConnectionStore.CurrentPath));previous?.Validate();}catch(Exception e) when(e is IOException or JsonException or InvalidOperationException){previous=null;}
+            ConnectionStore.TryLoad(out previous);
             var settings=await provisioner.Configure(selected.Ref,schema,Report,lifetime.Token,previous);
             lifetime.Token.ThrowIfCancellationRequested();ConnectionStore.Save(settings);Configured=true;export.Visible=true;cancel.Text="Done";link.Text="Project connected";
             Report("Preparing your technician account…");
@@ -78,7 +78,7 @@ internal sealed class SupabaseSetupWindow : Form {
     void ExportCustomer(){
         using var save=new SaveFileDialog{Filter="ZIP archive|*.zip",FileName="Galaxy-Control-Customer.zip"};if(save.ShowDialog(this)!=DialogResult.OK)return;
         try{
-            var settings=JsonSerializer.Deserialize<ConnectionSettings>(File.ReadAllText(ConnectionStore.CurrentPath))??throw new IOException();settings.Validate();
+            var settings=ConnectionStore.Load();
             var temporary=save.FileName+"."+Guid.NewGuid().ToString("N")+".tmp";
             try{
                 using(var zip=ZipFile.Open(temporary,ZipArchiveMode.Create)){

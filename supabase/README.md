@@ -2,6 +2,10 @@
 
 Each operator or GitHub downloader must use their **own** project. No shared Galaxy Control database or project credentials are included.
 
+## Technician experience
+
+The steps below are for developers configuring their own distribution. Technicians open the configured app, choose **I'm a technician**, and register/sign in there. The app saves public project settings automatically for future updates. No configuration copying or HTML setup page is part of the technician workflow. The legacy HTML page remains an optional developer diagnostic only.
+
 ## Install
 
 1. Create a dedicated Supabase project. Keep `public` exposed to the Data API and keep `galaxy_private` **unexposed**.
@@ -73,4 +77,4 @@ Download the green Windows Actions artifact, then run:
 python scripts/package-windows.py Galaxy-Control-P2P-Windows-x64.zip src/GalaxyControl/connection.local.json Galaxy-Control-Configured.zip
 ```
 
-The ZIP contains the existing tested EXE, public client configuration, a preconfigured technician signup page and start instructions. No management token, secret key, service-role key or password belongs in it. Keep this operator-specific package separate from public generic releases. Customers only open the EXE and enter the technician email; account setup is for technicians once. The setup page uses standard Supabase Auth confirmation emails and stores no credentials.
+The ZIP contains the existing tested EXE, public client configuration and start instructions. The app imports its configuration automatically. Technician registration and email-confirmation checks take place in the app. No management token, secret key, service-role key or password belongs in it. Keep this operator-specific package separate from public generic releases. Customers only open the EXE and enter the technician email; account setup is for technicians once. The setup page uses standard Supabase Auth confirmation emails and stores no credentials.

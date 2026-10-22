@@ -7,7 +7,8 @@ internal sealed class TechnicianRegistrationWindow : Form {
     readonly GoldButton create=new(){Text="Create technician account"};
     readonly RoundedButton check=new(){Text="Check confirmation & go online",Visible=false},resend=new(){Text="Resend confirmation email",Visible=false};
     readonly Label feedback=new(){AutoSize=false};
-    readonly CancellationTokenSource lifetime=new();
+    readonly CancellationTokenSource lifetime=new(TimeSpan.FromMinutes(15));
+    readonly System.Windows.Forms.Timer confirmation=new(){Interval=5000};
     readonly TechnicianAccount account;
     bool working,disposed;
     public string TechnicianEmail=>email.Text.Trim();
@@ -25,15 +26,29 @@ internal sealed class TechnicianRegistrationWindow : Form {
         create.SetBounds(30,342,490,46);check.SetBounds(30,398,490,46);resend.SetBounds(30,454,490,42);
         feedback.SetBounds(30,516,490,85);feedback.Text="Your credentials go only to this app's configured Supabase project. No separate setup page is needed.";
         Controls.AddRange([email,password,create,check,resend,feedback]);AcceptButton=create;
+        void WaitForConfirmation(){
+            email.ReadOnly=true;create.Visible=false;check.Visible=true;resend.Visible=true;AcceptButton=check;
+            feedback.Text="Confirm the email in your inbox. Galaxy Control checks automatically and takes you online when it is confirmed. If you already have an account, use its existing password.";
+            confirmation.Start();
+        }
+        confirmation.Tick+=async(_,_)=>{
+            if(working||disposed||lifetime.IsCancellationRequested)return;
+            working=true;
+            try{await account.Check(TechnicianEmail,password.Text,lifetime.Token);confirmation.Stop();DialogResult=DialogResult.OK;Close();}
+            catch(TechnicianAccountException e) when(e.Code=="email_not_confirmed"){ /* Wait for the user to confirm their email. */ }
+            catch(Exception e) when(e is HttpRequestException or JsonException or InvalidOperationException or OperationCanceledException){
+                confirmation.Stop();if(!IsDisposed)feedback.Text=e is InvalidOperationException?e.Message:"Automatic check paused. Click Check confirmation & go online to retry.";
+            }
+            finally{working=false;}
+        };
         create.Click+=async(_,_)=>await Run(async()=>{
             if(!MailAddress.TryCreate(TechnicianEmail,out var address)||address.Address!=TechnicianEmail||password.Text.Length<10)throw new InvalidOperationException("Enter a valid email and a password of at least 10 characters.");
             await account.Register(TechnicianEmail,password.Text,lifetime.Token);
-            email.ReadOnly=true;create.Visible=false;check.Visible=true;resend.Visible=true;AcceptButton=check;
-            feedback.Text="Check your inbox and spam folder for the confirmation email. If this address already has an account, use its existing password. Then click Check confirmation & go online.";
+            WaitForConfirmation();
         });
         check.Click+=async(_,_)=>await Run(async()=>{await account.Check(TechnicianEmail,password.Text,lifetime.Token);DialogResult=DialogResult.OK;Close();});
         resend.Click+=async(_,_)=>await Run(async()=>{await account.Resend(TechnicianEmail,lifetime.Token);feedback.Text="Confirmation requested. Check your inbox and spam folder, confirm the email, then return here.";});
-        if(confirmationPending){email.ReadOnly=true;create.Visible=false;check.Visible=true;resend.Visible=true;AcceptButton=check;feedback.Text="Your project is connected. Confirm the email, then click Check confirmation & go online.";}
+        if(confirmationPending)WaitForConfirmation();
         FormClosing+=(_,_)=>lifetime.Cancel();
     }
     async Task Run(Func<Task> action){
@@ -44,5 +59,5 @@ internal sealed class TechnicianRegistrationWindow : Form {
         catch(Exception e) when(e is HttpRequestException or JsonException or InvalidOperationException){if(!IsDisposed)feedback.Text=e is InvalidOperationException?e.Message:"Account service unavailable. Check your connection and retry.";}
         finally{working=false;if(!IsDisposed){create.Enabled=check.Enabled=resend.Enabled=true;email.Enabled=password.Enabled=true;}}
     }
-    protected override void Dispose(bool disposing){if(disposing&&!disposed){disposed=true;lifetime.Cancel();account.Dispose();lifetime.Dispose();}base.Dispose(disposing);}
+    protected override void Dispose(bool disposing){if(disposing&&!disposed){disposed=true;lifetime.Cancel();confirmation.Stop();confirmation.Dispose();account.Dispose();lifetime.Dispose();}base.Dispose(disposing);}
 }

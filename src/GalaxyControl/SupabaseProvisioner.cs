@@ -77,11 +77,29 @@ internal sealed class SupabaseProvisioner : IDisposable {
 }
 internal static class ConnectionStore {
     public static string LocalPath=>Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"GalaxyControl","connection.json");
-    public static string CurrentPath=>File.Exists(LocalPath)?LocalPath:Path.Combine(AppContext.BaseDirectory,"connection.json");
-    public static void Save(ConnectionSettings config){
-        config.Validate();Directory.CreateDirectory(Path.GetDirectoryName(LocalPath)!);
-        var staging=LocalPath+"."+Guid.NewGuid().ToString("N")+".tmp";
-        try{File.WriteAllText(staging,JsonSerializer.Serialize(config,new JsonSerializerOptions{WriteIndented=true}));File.Move(staging,LocalPath,true);}
+    public static ConnectionSettings Load()=>Load(LocalPath,Path.Combine(AppContext.BaseDirectory,"connection.json"));
+    // A configured distribution imports its public settings once. Later generic updates
+    // automatically reuse them, even when extracted into a different folder.
+    internal static ConnectionSettings Load(string localPath,string distributionPath){
+        foreach(var path in new[]{localPath,distributionPath}.Distinct()){
+            try{
+                var config=JsonSerializer.Deserialize<ConnectionSettings>(File.ReadAllText(path))??throw new JsonException();
+                config.Validate();
+                if(path!=localPath)Save(config,localPath);
+                return config;
+            }catch(Exception e) when(e is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException){}
+        }
+        throw new InvalidOperationException("Connect your project in Galaxy Control to continue.");
+    }
+    public static bool TryLoad(out ConnectionSettings? config){
+        try{config=Load();return true;}
+        catch(InvalidOperationException){config=null;return false;}
+    }
+    public static void Save(ConnectionSettings config)=>Save(config,LocalPath);
+    static void Save(ConnectionSettings config,string path){
+        config.Validate();Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var staging=path+"."+Guid.NewGuid().ToString("N")+".tmp";
+        try{File.WriteAllText(staging,JsonSerializer.Serialize(config,new JsonSerializerOptions{WriteIndented=true}));File.Move(staging,path,true);}
         finally{if(File.Exists(staging))File.Delete(staging);}
     }
 }

@@ -115,6 +115,7 @@ internal sealed class MainWindow : Form {
     Form? viewer;
     long lastMove;
     public MainWindow() {
+        ConnectionStore.TryLoad(out _); // Import a configured distribution automatically, before any update.
         AutoScaleDimensions=new SizeF(96,96);AutoScaleMode=AutoScaleMode.Dpi;
         Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         Text="Galaxy Control"; ClientSize=new Size(600,724);AutoScroll=true;AutoScrollMinSize=ClientSize; FormBorderStyle=FormBorderStyle.FixedSingle; MaximizeBox=false;
@@ -165,7 +166,7 @@ internal sealed class MainWindow : Form {
             consent.Text=tech?"Sign in with your verified technician account. You choose which support requests to accept.":"Your technician can view your screen and control your mouse and keyboard. You can stop sharing at any time.";
             connect.Text=tech?"Sign in & go online":"Connect to technician";
             stop.Text=tech?"Go offline":"Stop sharing";
-            if(!busy)status.Text=tech?"New here? Choose Create technician account. No separate setup page is needed.":"Ready when you are. You stay in control.";
+            if(!busy)status.Text=tech?"Sign in or create your account here. Your project connection is saved automatically.":"Ready when you are. You stay in control.";
         }
         mode.SelectedIndexChanged+=(_,_)=>UpdateMode();UpdateMode();
         AcceptButton=connect;ActiveControl=email;
@@ -220,23 +221,23 @@ internal sealed class MainWindow : Form {
         email.Text=setup.TechnicianEmail;token.Text=setup.TechnicianPassword;
         if(setup.AccountReady){await Connect();return;}
         try{
-            var settings=JsonSerializer.Deserialize<ConnectionSettings>(File.ReadAllText(ConnectionStore.CurrentPath))??throw new InvalidOperationException("Project configuration is missing.");
+            var settings=ConnectionStore.Load();
             using var registration=new TechnicianRegistrationWindow(settings,email.Text,token.Text,true);
             if(registration.ShowDialog(this)==DialogResult.OK){email.Text=registration.TechnicianEmail;token.Text=registration.TechnicianPassword;await Connect();}
             else status.Text="Project connected. Confirm your email, then sign in or reopen Create technician account.";
         }catch(Exception e) when(e is IOException or JsonException or InvalidOperationException){status.Text="Project configuration could not be loaded. Reopen Connect Supabase to retry.";}
     }
-    async Task RegisterTechnician() {
+    async Task RegisterTechnician(bool confirmationPending=false) {
         if(busy)return;
         try {
             ConnectionSettings settings;
             try {
-                settings=JsonSerializer.Deserialize<ConnectionSettings>(File.ReadAllText(ConnectionStore.CurrentPath))??throw new InvalidOperationException("Project configuration is missing.");settings.Validate();
+                settings=ConnectionStore.Load();settings.Validate();
             }catch(Exception e) when(e is IOException or JsonException or InvalidOperationException){
                 await SetUpSupabase();
                 return;
             }
-            using var registration=new TechnicianRegistrationWindow(settings,email.Text,token.Text);
+            using var registration=new TechnicianRegistrationWindow(settings,email.Text,token.Text,confirmationPending);
             if(registration.ShowDialog(this)==DialogResult.OK){email.Text=registration.TechnicianEmail;token.Text=registration.TechnicianPassword;await Connect();}
         }catch(Exception e) when(e is HttpRequestException or IOException or JsonException or InvalidOperationException){status.Text="Account setup could not open. Check this distribution's Supabase configuration.";}
     }
@@ -245,16 +246,17 @@ internal sealed class MainWindow : Form {
         if(!System.Net.Mail.MailAddress.TryCreate(email.Text.Trim(),out var address)||address.Address!=email.Text.Trim()){status.Text=mode.SelectedIndex==1?"Please enter your valid technician email.":"Please enter a valid technician email.";return;}
         technician=mode.SelectedIndex==1;
         if(technician&&string.IsNullOrWhiteSpace(token.Text)){status.Text="Enter your technician password.";return;}
+        if(technician&&!ConnectionStore.TryLoad(out _)){await SetUpSupabase();return;}
+        bool offerRegistration=false,confirmationPending=false;
         try {
-            using var config=JsonDocument.Parse(File.ReadAllText(ConnectionStore.CurrentPath));
-            stunUrls=config.RootElement.GetProperty("StunUrls").EnumerateArray().Select(value=>value.GetString()??"").ToArray();
+            var settings=ConnectionStore.Load();
+            stunUrls=settings.StunUrls;
             if(stunUrls.Length>4 || stunUrls.Any(url=>!System.Text.RegularExpressions.Regex.IsMatch(url,@"^stun:[a-zA-Z0-9.-]+(?::\d+)?$")))
                 throw new InvalidOperationException("Only STUN discovery servers are allowed. TURN relays are disabled.");
             busy=true;supabaseSetup.Visible=false;register.Visible=false;lifetime=new CancellationTokenSource(TimeSpan.FromHours(1));
             sessionId=Guid.NewGuid().ToString("N");
             connect.Enabled=false;mode.Enabled=false;email.Enabled=false;token.Enabled=false;stop.Enabled=true;stop.Visible=true;status.Text="Preparing secure P2P transport…";
             if(technician){
-                var settings=JsonSerializer.Deserialize<ConnectionSettings>(config.RootElement.GetRawText())??throw new InvalidOperationException("Project configuration is missing.");
                 using var account=new TechnicianAccount(settings);status.Text="Checking your technician account…";
                 await account.Check(address.Address,token.Text,lifetime.Token);
             }
@@ -262,15 +264,19 @@ internal sealed class MainWindow : Form {
             peer.Message+=async message=>await HandlePeerMessage(message);
             peer.Failed+=()=>EndWithMessage("The peer transport stopped. Sharing has ended.");
             await peer.Initialize(this,lifetime.Token);
-            directory=new SupabaseDirectory(config.RootElement.GetProperty("SupabaseUrl").GetString()!,config.RootElement.GetProperty("SupabasePublishableKey").GetString()!,sessionId);
+            directory=new SupabaseDirectory(settings.SupabaseUrl,settings.SupabasePublishableKey,sessionId);
             directory.Message+=ProcessDirectoryMessage;
             status.Text=technician?"Signing in to your support desk…":"Connecting to your technician…";
             await directory.Run(technician,address.Address.ToLowerInvariant(),token.Text,lifetime.Token);
+        } catch(TechnicianAccountException e) when(e.Code is "invalid_credentials" or "email_not_confirmed") {
+            confirmationPending=e.Code=="email_not_confirmed";
+            offerRegistration=true;status.Text=confirmationPending?"Waiting for your email confirmation…":"Sign in with an existing account or create your technician account here.";
         } catch(WebView2RuntimeNotFoundException) {
             status.Text="Microsoft Edge WebView2 Runtime is required. Install it from Microsoft's official WebView2 download page.";
         } catch(Exception e) when(e is HttpRequestException or OperationCanceledException or IOException or JsonException or InvalidOperationException or FormatException or KeyNotFoundException or TimeoutException or System.Runtime.InteropServices.ExternalException or ArgumentException) {
             if(lifetime?.IsCancellationRequested!=true)status.Text=e is InvalidOperationException?e.Message:"Connection ended or unavailable. Check the Supabase directory and technician details.";
         } finally {busy=false;Disconnect(false);lifetime?.Dispose();lifetime=null;}
+        if(offerRegistration&&!IsDisposed)await RegisterTechnician(confirmationPending);
     }
     void ProcessDirectoryMessage(JsonElement root) {
         var type=root.GetProperty("type").GetString();

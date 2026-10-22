@@ -18,6 +18,12 @@ Minimal, attended Windows remote support: **enter the technician's email → con
 
 A plain IP/port row does not remove NAT restrictions. Actual session candidates are exchanged automatically. Networks requiring a relay fail clearly; Galaxy Control does not fall back to server-based media transport.
 
+## Technician sign-in and updates
+
+Technicians use **GalaxyControl.exe** for the entire account workflow. Choose **I'm a technician**, enter email/password and sign in. If the account is new or awaiting email confirmation, the app opens registration or confirmation directly. It checks confirmation automatically while the account window stays open, then continues online. A wrong password never silently creates an account.
+
+A developer-configured download imports and saves its public project connection automatically on first launch. Later updates reuse it even when extracted into a different folder. Technicians do not copy configuration files, edit JSON or open a separate HTML page. If no valid project connection exists, technician sign-in opens **Connect Supabase** in the app.
+
 ## Automatic account setup
 
 The technician view includes **Connect Supabase**. With a developer-configured distribution, the technician creates a project named **Galaxy Control**, enters technician credentials and authorizes Supabase access in the external browser opened by the app. Galaxy Control installs and verifies its directory schema, permissions, Auth and public configuration. It preserves email confirmation and offers **Export customer app** with public connection settings only. The Supabase owner's login happens in the browser; the technician password belongs to the selected project's Auth service.
@@ -48,7 +54,7 @@ Requires .NET 8 SDK:
 dotnet publish src/GalaxyControl -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o artifacts/windows
 ```
 
-Distribute **GalaxyControl.exe, connection.json and setup-provider.json together**. .NET is bundled; Microsoft Edge WebView2 Evergreen Runtime must be installed. If missing, the app reports the requirement; get it from [Microsoft](https://developer.microsoft.com/microsoft-edge/webview2/). Production distribution should be code-signed.
+Developers distribute **GalaxyControl.exe, connection.json and setup-provider.json together** in their configured package. Technicians open the EXE; the app imports and preserves the public project connection automatically. .NET is bundled; Microsoft Edge WebView2 Evergreen Runtime must be installed. If missing, the app reports the requirement; get it from [Microsoft](https://developer.microsoft.com/microsoft-edge/webview2/). Production distribution should be code-signed.
 
 GitHub Actions produces **Galaxy-Control-P2P-Windows-x64** after the actual Windows WebView2 transport test. Public artifacts are deliberately unconfigured and do not use the author's Supabase. A configured Supabase project and a real two-PC Internet test are required before using a build with customers.
 

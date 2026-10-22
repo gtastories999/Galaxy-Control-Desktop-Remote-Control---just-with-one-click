@@ -2,6 +2,10 @@
 
 Implementation checked against official Supabase sources on 2026-10-22. Every developer/distributor registers their own OAuth application and deploys their own exchange backend. Generic builds intentionally contain no shared provider. A live end-to-end test must use that developer’s integration. Automated HTTP and browser-flow tests use controlled fakes; they are not evidence of live authorization.
 
+## Technician sign-in requires no file management
+
+A configured distribution saves its public project connection automatically on first launch. Future versions reuse it from the user profile; extracting an update into a new folder does not require copying any configuration. The technician login opens project setup automatically when no valid connection exists, or opens account registration/confirmation when appropriate. Confirmation is checked automatically while that dialog is open. Generic source/downloads still contain no author's project or shared OAuth provider: developers configure their own distribution once before giving it to technicians.
+
 ## Technician workflow
 
 1. Create a dedicated project named **Galaxy Control** in Supabase.
