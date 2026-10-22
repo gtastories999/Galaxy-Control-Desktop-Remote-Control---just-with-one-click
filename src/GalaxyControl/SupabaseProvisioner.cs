@@ -69,7 +69,7 @@ internal sealed class SupabaseProvisioner : IDisposable {
         await Request(HttpMethod.Patch,$"projects/{projectRef}/postgrest",new {db_schema="public, graphql_public"},ct);
         progress("Creating your public app configuration…");
         if(existing is not null&&existing.SupabaseUrl.TrimEnd('/')==$"https://{projectRef}.supabase.co"){existing.Validate();return existing;}
-        var key=await Request(HttpMethod.Post,$"projects/{projectRef}/api-keys?reveal=true",new {type="publishable",name="Galaxy Control",description="Public client access for Galaxy Control"},ct);
+        var key=await Request(HttpMethod.Post,$"projects/{projectRef}/api-keys?reveal=true",new {type="publishable",name="galaxy_control",description="Public client access for Galaxy Control"},ct);
         var config=new ConnectionSettings($"https://{projectRef}.supabase.co",key.GetProperty("api_key").GetString()!,["stun:stun.l.google.com:19302"]);
         config.Validate();return config;
     }

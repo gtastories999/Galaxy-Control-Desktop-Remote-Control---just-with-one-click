@@ -50,7 +50,7 @@ static class Program {
                 if(path.EndsWith("/config/auth")){Assert(!body.GetProperty("mailer_autoconfirm").GetBoolean(),"Email confirmation must remain enabled");Assert(body.GetProperty("external_anonymous_users_enabled").GetBoolean(),"Customers must not need accounts");}
                 else Assert(body.GetProperty("db_schema").GetString()=="public, graphql_public","Private directory schema must remain unexposed");
             }else if(r.Method==HttpMethod.Post&&path.EndsWith("/api-keys")){
-                var body=await r.Content!.ReadFromJsonAsync<JsonElement>(cancellationToken:ct);Assert(body.GetProperty("type").GetString()=="publishable","No elevated key may be requested");Keys++;result=new {api_key=Mode=="secret"?"sb_secret_must_never_be_saved":"sb_publishable_test_public_configuration_only"};
+                var body=await r.Content!.ReadFromJsonAsync<JsonElement>(cancellationToken:ct);Assert(body.GetProperty("type").GetString()=="publishable","No elevated key may be requested");Assert(System.Text.RegularExpressions.Regex.IsMatch(body.GetProperty("name").GetString()!,"^[a-z_][a-z0-9_]*$"),"Management API key name must use lowercase identifiers");Keys++;result=new {api_key=Mode=="secret"?"sb_secret_must_never_be_saved":"sb_publishable_test_public_configuration_only"};
             }else throw new Exception("Unexpected setup endpoint "+path);
             return new HttpResponseMessage(HttpStatusCode.OK){Content=JsonContent.Create(result)};
         }
