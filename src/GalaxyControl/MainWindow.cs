@@ -42,7 +42,7 @@ internal class RoundedButton : Button {
         // GDI text drawing can ignore the managed clip on rounded, buffered controls.
         g.TextRenderingHint=System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
         using var textBrush=new SolidBrush(Enabled?Color.FromArgb(44,40,28):Color.FromArgb(143,144,136));
-        using var format=new StringFormat {Alignment=StringAlignment.Center,LineAlignment=StringAlignment.Center,HotkeyPrefix=System.Drawing.Text.HotkeyPrefix.Show};
+        using var format=new StringFormat {Alignment=StringAlignment.Center,LineAlignment=StringAlignment.Center,HotkeyPrefix=System.Drawing.Text.HotkeyPrefix.None};
         g.DrawString(Text,Font,textBrush,ClientRectangle,format);
         if(Focused){using var focus=new Pen(Color.FromArgb(135,101,24));focus.DashStyle=DashStyle.Dot;using var inner=Shape(new RectangleF(5,5,Width-11,Height-11),10);g.DrawPath(focus,inner);}
     }
