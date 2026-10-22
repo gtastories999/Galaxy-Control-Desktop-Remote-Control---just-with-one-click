@@ -64,3 +64,11 @@ A publisher controls the account-exchange service and its release configuration.
 ## Verification
 
 `dotnet run --project tests/Provisioning -c Release` checks the owned-project boundary, repeat installation, partial schema and permission refusals, publishable-only keys, loopback state rejection and original PKCE verifier. `node tests/account-broker.cjs` checks signed tickets, verifier binding, expiration, fixed redirects, token isolation and inactive publisher configuration. Existing schema, directory, WebRTC, real Windows WebView2 and native UI tests also remain required.
+
+## In-app technician registration
+
+Configured distributions expose **Create technician account** directly in technician mode. Signup, confirmation resend, and confirmation checks use only the distribution's configured project and publishable key. Passwords are not written to configuration files. After email confirmation, **Check confirmation & go online** validates the credentials and starts the normal attended technician session. Existing accounts continue using **Sign in & go online**. Unconfigured distributions route account creation to **Connect Supabase**; their developer must supply their own OAuth integration first. No separate HTML page is required.
+
+Galaxy is the umbrella brand: use Gradient Yellow Gold for buttons and the existing gold 3D star-and-orbit logo from the login screen throughout onboarding. Generic builds remain free of operator configuration and credentials.
+
+Auth signup and confirmation resend references checked on 2026-10-22: https://supabase.com/docs/reference/javascript/auth-signup and https://supabase.com/docs/reference/javascript/auth-resend. Email confirmation and SMTP delivery remain project prerequisites; no email verification is bypassed.

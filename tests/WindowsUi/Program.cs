@@ -15,6 +15,15 @@ internal static class Program {
                 Require(Descendants(setup).Any(c=>c.Visible&&c.Text=="Connect Supabase"),"Automatic setup must expose the account connection action.");
                 Snapshot(setup,"supabase-account-setup");setup.Close();
             }
+            var assembly=Assembly.Load("GalaxyControl");
+            var settings=Activator.CreateInstance(assembly.GetType("GalaxyControl.ConnectionSettings",true)!,new object[]{"https://example.supabase.co","sb_publishable_test_only_not_real",Array.Empty<string>()})!;
+            foreach(var pending in new[]{false,true}){
+                using var registration=(Form)Activator.CreateInstance(assembly.GetType("GalaxyControl.TechnicianRegistrationWindow",true)!,new object[]{settings,"tech@example.com","",pending})!;
+                registration.Show();Application.DoEvents();
+                Require(Descendants(registration).Any(c=>c.Visible&&c.Text==(pending?"Check confirmation & go online":"Create technician account")),"Registration must expose the action for its current stage.");
+                Require(Descendants(registration).Any(c=>c.GetType().Name=="GalaxyLogo"),"Registration must reuse the existing login logo.");
+                Snapshot(registration,pending?"technician-confirmation":"technician-registration");registration.Close();
+            }
             Console.WriteLine("PASS: actual Windows UI, visible native role selector, role-specific copy, transparent button perimeters, embedded alpha logo and 100/125/150/200% layout snapshots.");
         }catch(Exception e){Console.Error.WriteLine(e);Environment.ExitCode=1;}
     }
@@ -46,6 +55,7 @@ internal static class Program {
         mode.SelectedIndex=1;Application.DoEvents();
         Require(password.Visible&&password.UseSystemPasswordChar,"Technician view must expose a masked password.");
         Require(hint.Text.Contains("verified technician account")&&!hint.Text.Contains("view your screen"),"Technician hint must describe account sign-in, not screen sharing.");
+        Require(Find<Control>("registerButton").Visible,"New technicians must be able to register inside the app.");
         Require(connect.Text=="Sign in & go online"&&Find<Control>("stopButton").Text=="Go offline","Technician actions must match the role.");
         Require(hint.Bottom<=connect.Top,"Role explanation must not overlap the primary action.");
         Require(password.Parent!.Bottom<=hint.Top,$"Password and explanation must not overlap at {scale*100}%. Password bottom={password.Parent.Bottom}, hint top={hint.Top}.");

@@ -9,6 +9,7 @@ static class Program {
     static void Assert(bool value,string message){if(!value)throw new Exception(message);}
     static async Task Reject(Func<Task> action){try{await action();throw new Exception("Expected refusal");}catch(InvalidOperationException){}}
     static async Task Main(){
+        await VerifyTechnicianAccount();
         var fake=new Management();using(var api=new SupabaseProvisioner("test-owner-token",fake)){
             var config=await api.Configure(Project,"TEST_INSTALL_SQL",_=>{},CancellationToken.None);
             Assert(config.SupabaseUrl==$"https://{Project}.supabase.co","Only selected project may be configured");
@@ -33,6 +34,34 @@ static class Program {
         if(browser is not null)await browser;
         Assert(token=="test-account-token"&&h.Exchanged,"OAuth response must be exchanged in memory with PKCE");
         Console.WriteLine("PASS: owned named project only, safe repeat install, authorization/readiness/partial-schema/permission/key failures, loopback state checks and PKCE token exchange.");
+    }
+    static async Task VerifyTechnicianAccount(){
+        var transport=new AccountTransport();
+        var settings=new ConnectionSettings("https://example.supabase.co","sb_publishable_test_only_not_real",[]);
+        using var account=new TechnicianAccount(settings,transport);
+        await account.Register("Tech@Example.com","test-password",CancellationToken.None);
+        Assert(transport.Path=="/auth/v1/signup"&&transport.Email=="tech@example.com","Registration must target only the selected project and normalize email");
+        await account.Resend("Tech@Example.com",CancellationToken.None);
+        Assert(transport.Path=="/auth/v1/resend"&&transport.SignupType,"Resend must request signup confirmation without a password");
+        transport.Error="email_not_confirmed";await Reject(()=>account.Check("tech@example.com","test-password",CancellationToken.None));
+        transport.Error="invalid_credentials";await Reject(()=>account.Check("tech@example.com","wrong-password",CancellationToken.None));
+        transport.Error="rate_limit";await Reject(()=>account.Resend("tech@example.com",CancellationToken.None));
+        transport.Error="";await account.Check("tech@example.com","test-password",CancellationToken.None);
+        transport.EmptySession=true;await Reject(()=>account.Check("tech@example.com","test-password",CancellationToken.None));
+        Console.WriteLine("PASS: in-app signup, confirmation resend, project isolation, unconfirmed/wrong-password/rate-limit refusals and verified session checks.");
+    }
+    sealed class AccountTransport:HttpMessageHandler {
+        public string Path="",Email="",Error="";public bool SignupType,EmptySession;
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken ct){
+            Assert(request.RequestUri!.Host=="example.supabase.co","Credentials must only reach the configured project");
+            Assert(request.Headers.Authorization is null,"No administrator bearer token may accompany signup");
+            Assert(request.Headers.GetValues("apikey").Single()=="sb_publishable_test_only_not_real","Only publishable app keys may be used");
+            Path=request.RequestUri.AbsolutePath;
+            var body=await request.Content!.ReadFromJsonAsync<JsonElement>(cancellationToken:ct);Email=body.GetProperty("email").GetString()!;
+            SignupType=body.TryGetProperty("type",out var type)&&type.GetString()=="signup";
+            if(Path.EndsWith("resend"))Assert(!body.TryGetProperty("password",out _),"Resend must not transmit the password");
+            return new HttpResponseMessage(Error==""?HttpStatusCode.OK:Error=="rate_limit"?HttpStatusCode.TooManyRequests:HttpStatusCode.BadRequest){Content=JsonContent.Create(Error!=""?new {error_code=Error}:Path.EndsWith("token")&&!EmptySession?(object)new {access_token="test-session"}:new {})};
+        }
     }
     sealed class Management:HttpMessageHandler {
         public string Mode="";public bool Installed;public int Installs,Keys,Patches;

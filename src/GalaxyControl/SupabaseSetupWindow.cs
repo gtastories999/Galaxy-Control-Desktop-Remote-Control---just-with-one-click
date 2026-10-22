@@ -17,13 +17,15 @@ internal sealed class SupabaseSetupWindow : Form {
     OperatorProject[] projects=[];
     bool working,disposed;
     public bool Configured {get;private set;}
+    public bool AccountReady {get;private set;}
     public string TechnicianEmail=>email.Text.Trim();
     public string TechnicianPassword=>password.Text;
     public SupabaseSetupWindow(string initialEmail,string initialPassword){
         Text="Galaxy Control · Connect Supabase";AutoScaleDimensions=new SizeF(96,96);AutoScaleMode=AutoScaleMode.Dpi;
         ClientSize=new Size(550,640);FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;MinimizeBox=false;StartPosition=FormStartPosition.CenterParent;
-        Font=new Font("Segoe UI",10);BackColor=Color.FromArgb(250,250,247);ForeColor=Color.FromArgb(35,39,32);
-        Controls.Add(new Label{Text="Your account. Your project.",Bounds=new Rectangle(30,28,490,42),Font=new Font("Segoe UI",21,FontStyle.Bold)});
+        Font=new Font("Segoe UI",10);BackColor=Color.FromArgb(250,250,250);ForeColor=Color.FromArgb(35,35,35);
+        Controls.Add(new GalaxyLogo{Bounds=new Rectangle(25,18,64,64)});
+        Controls.Add(new Label{Text="Your account. Your project.",Bounds=new Rectangle(100,28,420,42),Font=new Font("Segoe UI",21,FontStyle.Bold)});
         Controls.Add(new Label{Text="Create a Supabase project named Galaxy Control. Then connect your account to set it up automatically.",Bounds=new Rectangle(30,82,490,52),ForeColor=Color.DimGray});
         create.SetBounds(30,142,490,44);Controls.Add(create);
         Controls.Add(new Label{Text="Technician email",Bounds=new Rectangle(30,204,490,23)});email.Text=initialEmail;email.PlaceholderText="you@example.com";email.SetBounds(30,232,490,32);
@@ -65,6 +67,7 @@ internal sealed class SupabaseSetupWindow : Form {
             lifetime.Token.ThrowIfCancellationRequested();ConnectionStore.Save(settings);Configured=true;export.Visible=true;cancel.Text="Done";link.Text="Project connected";
             Report("Preparing your technician account…");
             var ready=await TechnicianAccount.Ensure(settings,TechnicianEmail,password.Text,lifetime.Token);
+            AccountReady=ready;
             Report(ready?"Supabase is connected. Close this window and sign in to go online.":"Project configured. Confirm your technician email, then sign in to Galaxy Control. Your current network address updates when connecting.");
             link.Text="Setup complete";link.Enabled=false;cancel.Text="Done";
             provisioner.Dispose();provisioner=null;
@@ -89,15 +92,4 @@ internal sealed class SupabaseSetupWindow : Form {
         }catch(Exception e) when(e is IOException or JsonException or InvalidOperationException or UnauthorizedAccessException){Report("The customer app could not be exported. Choose a writable folder and retry.");}
     }
     protected override void Dispose(bool disposing){if(disposing&&!disposed){disposed=true;lifetime.Cancel();lifetime.Dispose();provisioner?.Dispose();}base.Dispose(disposing);}
-}
-internal static class TechnicianAccount {
-    public static async Task<bool> Ensure(ConnectionSettings settings,string email,string password,CancellationToken ct){
-        settings.Validate();using var http=new HttpClient{BaseAddress=new Uri(settings.SupabaseUrl.TrimEnd('/')+"/"),Timeout=TimeSpan.FromSeconds(20)};http.DefaultRequestHeaders.Add("apikey",settings.SupabasePublishableKey);
-        using var login=await http.PostAsJsonAsync("auth/v1/token?grant_type=password",new {email,password},ct);
-        if(login.IsSuccessStatusCode)return true;
-        if((int)login.StatusCode!=400)throw new InvalidOperationException("Project configured, but technician sign-in is temporarily unavailable. Try signing in from the main window.");
-        using var signup=await http.PostAsJsonAsync("auth/v1/signup",new {email,password},ct);
-        if(!signup.IsSuccessStatusCode)throw new InvalidOperationException("Project configured. Technician account creation needs attention: check email delivery in Supabase, or sign in with your existing account.");
-        return false;
-    }
 }
