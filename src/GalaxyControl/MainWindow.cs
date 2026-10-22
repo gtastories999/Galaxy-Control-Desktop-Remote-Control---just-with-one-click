@@ -4,14 +4,13 @@ using System.Net.Http;
 using System.Text.Json;
 using Microsoft.Web.WebView2.Core;
 namespace GalaxyControl;
-internal class RoundedButton : Button {
+internal class RoundedButton : Control, IButtonControl {
     protected bool Hovered;
     public bool Gold { get; set; }
     public RoundedButton() {
-        FlatStyle=FlatStyle.Flat; FlatAppearance.BorderSize=0; Cursor=Cursors.Hand;
-        UseVisualStyleBackColor=false;
-        SetStyle(ControlStyles.SupportsTransparentBackColor,true);BackColor=Color.Transparent;
-        FlatAppearance.MouseOverBackColor=Color.Transparent;FlatAppearance.MouseDownBackColor=Color.Transparent;
+        Cursor=Cursors.Hand;TabStop=true;AccessibleRole=AccessibleRole.PushButton;
+        SetStyle(ControlStyles.SupportsTransparentBackColor|ControlStyles.Selectable|ControlStyles.StandardClick,true);
+        BackColor=Color.Transparent;
         Font=new Font("Segoe UI",10,FontStyle.Bold);
         SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer,true);
     }
@@ -20,12 +19,21 @@ internal class RoundedButton : Button {
         p.AddArc(r.X,r.Y,d,d,180,90);p.AddArc(r.Right-d,r.Y,d,d,270,90);
         p.AddArc(r.Right-d,r.Bottom-d,d,d,0,90);p.AddArc(r.X,r.Bottom-d,d,d,90,90);p.CloseFigure();return p;
     }
-    protected override void OnResize(EventArgs e) {
-        base.OnResize(e);
-        if(Width<4||Height<4)return;
-        using var outline=Shape(new RectangleF(0,0,Width,Height),Math.Min(14,Height/2f));
-        var previous=Region;Region=new Region(outline);previous?.Dispose();
+    public DialogResult DialogResult { get; set; }
+    public void NotifyDefault(bool value){Invalidate();}
+    public void PerformClick(){
+        if(!CanSelect||!Enabled)return;
+        OnClick(EventArgs.Empty);
+        if(DialogResult!=DialogResult.None&&FindForm() is {} form)form.DialogResult=DialogResult;
     }
+    protected override bool IsInputKey(Keys keyData)=>(keyData&Keys.KeyCode)==Keys.Space||base.IsInputKey(keyData);
+    protected override void OnKeyDown(KeyEventArgs e){if(e.KeyCode==Keys.Space){e.Handled=true;}base.OnKeyDown(e);}
+    protected override void OnKeyUp(KeyEventArgs e){if(e.KeyCode==Keys.Space){e.Handled=true;PerformClick();}base.OnKeyUp(e);}
+    protected override void OnMouseDown(MouseEventArgs e){if(e.Button==MouseButtons.Left)Focus();base.OnMouseDown(e);}
+    protected override void OnGotFocus(EventArgs e){base.OnGotFocus(e);Invalidate();}
+    protected override void OnLostFocus(EventArgs e){base.OnLostFocus(e);Invalidate();}
+    protected override void OnEnabledChanged(EventArgs e){base.OnEnabledChanged(e);Invalidate();}
+    protected override void OnTextChanged(EventArgs e){base.OnTextChanged(e);Invalidate();}
     protected override void OnPaintBackground(PaintEventArgs e) {
         base.OnPaintBackground(e);
     }
@@ -37,7 +45,7 @@ internal class RoundedButton : Button {
         using var fill=new LinearGradientBrush(ClientRectangle,
             !Enabled?Color.FromArgb(239,239,235):Gold?Color.FromArgb(255,231,119):Hovered?Color.FromArgb(247,245,236):Color.White,
             !Enabled?Color.FromArgb(232,232,227):Gold?Color.FromArgb(232,178,47):Color.FromArgb(250,250,247),35);
-        g.FillPath(fill,path);using var border=new Pen(Gold?Color.FromArgb(223,177,57):Color.FromArgb(224,226,221));g.DrawPath(border,path);
+        g.FillPath(fill,path);
         // Use the same alpha-aware renderer for the label and button surface.
         // GDI text drawing can ignore the managed clip on rounded, buffered controls.
         g.TextRenderingHint=System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;

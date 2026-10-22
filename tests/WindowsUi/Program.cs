@@ -8,7 +8,7 @@ internal static class Program {
         try {
             Directory.CreateDirectory("artifacts/ui");
             foreach(var scale in new[]{1f,1.25f,1.5f,2f})Verify(scale);
-            Console.WriteLine("PASS: actual Windows UI, visible native role selector, role-specific copy, rounded button regions, embedded alpha logo and 100/125/150/200% layout snapshots.");
+            Console.WriteLine("PASS: actual Windows UI, visible native role selector, role-specific copy, transparent button perimeters, embedded alpha logo and 100/125/150/200% layout snapshots.");
         }catch(Exception e){Console.Error.WriteLine(e);Environment.ExitCode=1;}
     }
     static void Require(bool condition,string message){if(!condition)throw new InvalidOperationException(message);}
@@ -31,7 +31,7 @@ internal static class Program {
         Require(mode.Items.Count==2,"Both support roles must be available.");
         Require(mode.Width>=300*scale&&mode.Height>=mode.Font.Height+4,"Role selector must have a usable size.");
         mode.DroppedDown=true;Application.DoEvents();Require(mode.DroppedDown,"Native role dropdown must open.");mode.DroppedDown=false;
-        var hint=Find<Label>("modeHint");var password=Find<TextBox>("technicianPassword");var connect=Find<Button>("connectButton");
+        var hint=Find<Label>("modeHint");var password=Find<TextBox>("technicianPassword");var connect=Find<Control>("connectButton");
         mode.SelectedIndex=0;Application.DoEvents();
         Require(!password.Visible&&hint.Text.Contains("stop sharing"),"Customer view must explain sharing and hide the password.");
         Require(connect.Text=="Connect to technician","Customer action must connect to a technician.");
@@ -39,12 +39,19 @@ internal static class Program {
         mode.SelectedIndex=1;Application.DoEvents();
         Require(password.Visible&&password.UseSystemPasswordChar,"Technician view must expose a masked password.");
         Require(hint.Text.Contains("verified technician account")&&!hint.Text.Contains("view your screen"),"Technician hint must describe account sign-in, not screen sharing.");
-        Require(connect.Text=="Sign in & go online"&&Find<Button>("stopButton").Text=="Go offline","Technician actions must match the role.");
+        Require(connect.Text=="Sign in & go online"&&Find<Control>("stopButton").Text=="Go offline","Technician actions must match the role.");
         Require(hint.Bottom<=connect.Top,"Role explanation must not overlap the primary action.");
         Require(password.Parent!.Bottom<=hint.Top,$"Password and explanation must not overlap at {scale*100}%. Password bottom={password.Parent.Bottom}, hint top={hint.Top}.");
-        foreach(var button in controls.OfType<Button>()) {
-            Require(button.Region is not null&&!button.Region.IsVisible(0,0),"Button background and hit region must exclude square corners.");
-            Require(button.Region!.IsVisible(button.Width/2,button.Height/2),"Button center must remain clickable.");
+        foreach(var button in controls.Where(c=>c is IButtonControl)) {
+            Require(button is not Button,"Rounded controls must not use the native Windows BUTTON renderer.");
+            Require(button.BackColor==Color.Transparent,"Button corners must show the parent surface.");
+            using var rendered=new Bitmap(button.Width,button.Height);
+            button.DrawToBitmap(rendered,new Rectangle(Point.Empty,rendered.Size));
+            for(var x=0;x<rendered.Width;x++)for(var y=0;y<rendered.Height;y++) {
+                if(x>3&&x<rendered.Width-4&&y>3&&y<rendered.Height-4)continue;
+                var pixel=rendered.GetPixel(x,y);
+                Require(pixel.A==0||pixel.R+pixel.G+pixel.B>300,"Button perimeter must not contain dark native borders.");
+            }
         }
         foreach(var label in controls.OfType<Label>().Where(c=>c.Visible&&c.Name=="modeHint")) {
             var measured=TextRenderer.MeasureText(label.Text,label.Font,new Size(label.Width,int.MaxValue),TextFormatFlags.WordBreak);
