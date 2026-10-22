@@ -3,6 +3,8 @@ using System.Reflection;
 using GalaxyControl;
 
 internal static class Program {
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    static extern nint SendMessage(nint handle,int message,nint wParam,nint lParam);
     [STAThread] static void Main() {
         ApplicationConfiguration.Initialize();
         try {
@@ -61,6 +63,15 @@ internal static class Program {
         Require(stream is not null,"The 3D logo must be embedded in the application.");
         using var logo=new Bitmap(stream!);Require(Image.IsAlphaPixelFormat(logo.PixelFormat)&&logo.GetPixel(0,0).A==0,"3D logo must have an actual transparent background.");
         Snapshot(window,$"technician-{scale*100:0}");
+        if(scale==1f){
+            var clicks=0;connect.Click+=(_,_)=>clicks++;
+            var center=(nint)((connect.Width/2)|((connect.Height/2)<<16));
+            SendMessage(connect.Handle,0x0201,1,center);SendMessage(connect.Handle,0x0202,0,center);
+            Require(clicks==1,"The new button must respond to a real Windows mouse click.");
+            ((IButtonControl)connect).PerformClick();Require(clicks==2,"Default form action must remain clickable.");
+            SendMessage(connect.Handle,0x0100,(nint)Keys.Space,0);SendMessage(connect.Handle,0x0101,(nint)Keys.Space,0);
+            Require(clicks==3,"Space must activate the focused button once.");
+        }
         mode.SelectedIndex=0;Application.DoEvents();Require(!password.Visible,"Switching back to Get help must hide technician credentials.");
         window.Close();
     }
