@@ -10,6 +10,11 @@ internal static class Program {
         try {
             Directory.CreateDirectory("artifacts/ui");
             foreach(var scale in new[]{1f,1.25f,1.5f,2f})Verify(scale);
+            using(var setup=(Form)Activator.CreateInstance(Assembly.Load("GalaxyControl").GetType("GalaxyControl.SupabaseSetupWindow",true)!,new object[]{"", ""})!){
+                setup.Show();Application.DoEvents();
+                Require(Descendants(setup).Any(c=>c.Visible&&c.Text=="Connect Supabase"),"Automatic setup must expose the account connection action.");
+                Snapshot(setup,"supabase-account-setup");setup.Close();
+            }
             Console.WriteLine("PASS: actual Windows UI, visible native role selector, role-specific copy, transparent button perimeters, embedded alpha logo and 100/125/150/200% layout snapshots.");
         }catch(Exception e){Console.Error.WriteLine(e);Environment.ExitCode=1;}
     }

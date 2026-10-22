@@ -19,7 +19,7 @@ export function createAccountBroker({clientId,clientSecret,baseUrl,fetchImpl=fet
   return async request=>{
     try{
       if(!ready)return error(503);
-      const url=new URL(request.url);if(url.origin!==root.origin||!url.pathname.startsWith(root.pathname))return error(404);
+      const url=new URL(request.url);if(!url.pathname.startsWith(root.pathname))return error(404);
       const route=url.pathname.slice(root.pathname.length);
       if(request.method==='GET'&&route==='status')return json({ready:true});
       if(request.method==='GET'&&route==='start'){
