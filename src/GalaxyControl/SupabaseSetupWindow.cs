@@ -17,6 +17,7 @@ internal sealed class SupabaseSetupWindow : Form {
     OperatorProject[] projects=[];
     bool working,disposed;
     public bool Configured {get;private set;}
+    public bool AccountReady {get;private set;}
     public string TechnicianEmail=>email.Text.Trim();
     public string TechnicianPassword=>password.Text;
     public SupabaseSetupWindow(string initialEmail,string initialPassword){
@@ -66,6 +67,7 @@ internal sealed class SupabaseSetupWindow : Form {
             lifetime.Token.ThrowIfCancellationRequested();ConnectionStore.Save(settings);Configured=true;export.Visible=true;cancel.Text="Done";link.Text="Project connected";
             Report("Preparing your technician account…");
             var ready=await TechnicianAccount.Ensure(settings,TechnicianEmail,password.Text,lifetime.Token);
+            AccountReady=ready;
             Report(ready?"Supabase is connected. Close this window and sign in to go online.":"Project configured. Confirm your technician email, then sign in to Galaxy Control. Your current network address updates when connecting.");
             link.Text="Setup complete";link.Enabled=false;cancel.Text="Done";
             provisioner.Dispose();provisioner=null;

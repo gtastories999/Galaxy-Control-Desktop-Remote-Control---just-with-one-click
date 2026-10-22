@@ -151,7 +151,7 @@ internal sealed class MainWindow : Form {
         register.Name="registerButton";register.TabIndex=7;register.SetBounds(30,516,480,44);
         card.Controls.AddRange([connect,stop,accept,supabaseSetup,register]);
         register.Click+=async(_,_)=>await RegisterTechnician();
-        supabaseSetup.Click+=(_,_)=>{using var setup=new SupabaseSetupWindow(email.Text,token.Text);setup.ShowDialog(this);if(setup.Configured){email.Text=setup.TechnicianEmail;token.Text=setup.TechnicianPassword;status.Text="Supabase configured. Confirm your email if needed, then sign in.";}};
+        supabaseSetup.Click+=async(_,_)=>await SetUpSupabase();
         status.Name="connectionStatus";status.AccessibleName="Connection status";status.SetBounds(58,736,484,42);status.ForeColor=Color.FromArgb(106,106,106);status.Font=new Font("Segoe UI",9);status.Text="Ready when you are. You stay in control.";Controls.Add(status);
         void UpdateMode() {
             bool tech=mode.SelectedIndex==1;token.Parent!.Visible=tech;supabaseSetup.Visible=tech&&!busy;register.Visible=tech&&!busy;
@@ -213,6 +213,19 @@ internal sealed class MainWindow : Form {
             if(busy && lifetime?.IsCancellationRequested!=true)EndWithMessage("Directory disconnected. Sharing has ended.");
         }
     }
+    async Task SetUpSupabase(){
+        if(busy)return;
+        using var setup=new SupabaseSetupWindow(email.Text,token.Text);setup.ShowDialog(this);
+        if(!setup.Configured)return;
+        email.Text=setup.TechnicianEmail;token.Text=setup.TechnicianPassword;
+        if(setup.AccountReady){await Connect();return;}
+        try{
+            var settings=JsonSerializer.Deserialize<ConnectionSettings>(File.ReadAllText(ConnectionStore.CurrentPath))??throw new InvalidOperationException("Project configuration is missing.");
+            using var registration=new TechnicianRegistrationWindow(settings,email.Text,token.Text,true);
+            if(registration.ShowDialog(this)==DialogResult.OK){email.Text=registration.TechnicianEmail;token.Text=registration.TechnicianPassword;await Connect();}
+            else status.Text="Project connected. Confirm your email, then sign in or reopen Create technician account.";
+        }catch(Exception e) when(e is IOException or JsonException or InvalidOperationException){status.Text="Project configuration could not be loaded. Reopen Connect Supabase to retry.";}
+    }
     async Task RegisterTechnician() {
         if(busy)return;
         try {
@@ -220,8 +233,7 @@ internal sealed class MainWindow : Form {
             try {
                 settings=JsonSerializer.Deserialize<ConnectionSettings>(File.ReadAllText(ConnectionStore.CurrentPath))??throw new InvalidOperationException("Project configuration is missing.");settings.Validate();
             }catch(Exception e) when(e is IOException or JsonException or InvalidOperationException){
-                using var setup=new SupabaseSetupWindow(email.Text,token.Text);setup.ShowDialog(this);
-                if(setup.Configured){email.Text=setup.TechnicianEmail;token.Text=setup.TechnicianPassword;status.Text="Project connected. Confirm your email, then sign in. You can reopen Create technician account to resend confirmation.";}
+                await SetUpSupabase();
                 return;
             }
             using var registration=new TechnicianRegistrationWindow(settings,email.Text,token.Text);

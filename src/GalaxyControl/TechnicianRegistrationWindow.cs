@@ -12,7 +12,7 @@ internal sealed class TechnicianRegistrationWindow : Form {
     bool working,disposed;
     public string TechnicianEmail=>email.Text.Trim();
     public string TechnicianPassword=>password.Text;
-    public TechnicianRegistrationWindow(ConnectionSettings settings,string initialEmail,string initialPassword){
+    public TechnicianRegistrationWindow(ConnectionSettings settings,string initialEmail,string initialPassword,bool confirmationPending=false){
         account=new TechnicianAccount(settings);
         Text="Galaxy Control · Technician account";AutoScaleDimensions=new SizeF(96,96);AutoScaleMode=AutoScaleMode.Dpi;
         ClientSize=new Size(550,620);FormBorderStyle=FormBorderStyle.FixedDialog;MaximizeBox=false;MinimizeBox=false;StartPosition=FormStartPosition.CenterParent;
@@ -33,6 +33,7 @@ internal sealed class TechnicianRegistrationWindow : Form {
         });
         check.Click+=async(_,_)=>await Run(async()=>{await account.Check(TechnicianEmail,password.Text,lifetime.Token);DialogResult=DialogResult.OK;Close();});
         resend.Click+=async(_,_)=>await Run(async()=>{await account.Resend(TechnicianEmail,lifetime.Token);feedback.Text="Confirmation requested. Check your inbox and spam folder, confirm the email, then return here.";});
+        if(confirmationPending){email.ReadOnly=true;create.Visible=false;check.Visible=true;resend.Visible=true;AcceptButton=check;feedback.Text="Your project is connected. Confirm the email, then click Check confirmation & go online.";}
         FormClosing+=(_,_)=>lifetime.Cancel();
     }
     async Task Run(Func<Task> action){
