@@ -18,17 +18,19 @@ Minimal, attended Windows remote support: **enter the technician's email → con
 
 A plain IP/port row does not remove NAT restrictions. Actual session candidates are exchanged automatically. Networks requiring a relay fail clearly; Galaxy Control does not fall back to server-based media transport.
 
-## Automatic account setup (publisher activation pending)
+## Automatic account setup
 
-The technician view includes **Connect Supabase**. After the publisher registers and activates its Supabase OAuth integration, the technician creates a dedicated project named **Galaxy Control**, enters technician credentials, and authorizes the app in their browser. Galaxy Control configures the private directory, permissions, Auth and public configuration automatically. It preserves email confirmation, does not store passwords or owner tokens, and offers **Export customer app** with only public configuration.
+The technician view includes **Connect Supabase**. With a developer-configured distribution, the technician creates a project named **Galaxy Control**, enters technician credentials and authorizes Supabase access in the external browser opened by the app. Galaxy Control installs and verifies its directory schema, permissions, Auth and public configuration. It preserves email confirmation and offers **Export customer app** with public connection settings only. The Supabase owner's login happens in the browser; the technician password belongs to the selected project's Auth service.
 
-The OAuth integration is not registered or live in this branch. The button explicitly reports that publisher activation is required; it does not silently substitute manual token entry. See [publisher activation and verification](supabase/ACCOUNT-CONNECTION.md). Each technician uses their own project; the small setup-only OAuth exchange service never receives desktop/control data.
+**Every developer/fork registers their own OAuth application and deploys their own exchange backend.** There is no shared author integration. Follow the [developer setup guide](supabase/ACCOUNT-CONNECTION.md), then run `python scripts/configure-provider.py YOUR_HTTPS_BROKER_URL` before building. The helper writes an ignored local configuration containing only the public URL; OAuth secrets stay on your server.
+
+Generic GitHub downloads intentionally have no provider configured. Their setup button explains the required developer setup. Technicians using a configured distribution only authorize that distribution's integration and use their own project; they do not register an OAuth application. The exchange backend is used during setup only and never carries remote desktop/control data.
 
 ## Own Supabase required
 
-**There is no shared project in this repository or the GitHub download.** Each operator installs the included SQL in their own Supabase project and configures their own URL and publishable key. Both participants use that same operator's configuration. No secret/service-role key belongs in the app.
+**There is no shared project in this repository or the GitHub download.** Both participants use the technician's project configuration. No secret/service-role key belongs in the app.
 
-Follow the complete [Supabase setup guide](supabase/README.md). It includes Auth settings, the database schema, privacy/permissions and configuration. No separate VPS, custom WebSocket server or Edge Function is required.
+As an alternative to automatic setup, follow the [manual Supabase setup guide](supabase/README.md), install the schema and configure your own public URL/key. This manual route requires no OAuth exchange backend.
 
 For a personal source build:
 
@@ -46,7 +48,7 @@ Requires .NET 8 SDK:
 dotnet publish src/GalaxyControl -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o artifacts/windows
 ```
 
-Distribute **GalaxyControl.exe and connection.json together**. .NET is bundled; Microsoft Edge WebView2 Evergreen Runtime must be installed. If missing, the app reports the requirement; get it from [Microsoft](https://developer.microsoft.com/microsoft-edge/webview2/). Production distribution should be code-signed.
+Distribute **GalaxyControl.exe, connection.json and setup-provider.json together**. .NET is bundled; Microsoft Edge WebView2 Evergreen Runtime must be installed. If missing, the app reports the requirement; get it from [Microsoft](https://developer.microsoft.com/microsoft-edge/webview2/). Production distribution should be code-signed.
 
 GitHub Actions produces **Galaxy-Control-P2P-Windows-x64** after the actual Windows WebView2 transport test. Public artifacts are deliberately unconfigured and do not use the author's Supabase. A configured Supabase project and a real two-PC Internet test are required before using a build with customers.
 

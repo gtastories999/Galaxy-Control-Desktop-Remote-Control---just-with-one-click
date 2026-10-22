@@ -1,6 +1,6 @@
 # Automatic Supabase account connection
 
-Implementation checked against official Supabase sources on 2026-10-22. Publisher activation and a live end-to-end OAuth/hosted-project test are still pending. Automated HTTP and browser-flow tests use controlled fakes; they are not evidence of live authorization.
+Implementation checked against official Supabase sources on 2026-10-22. Every developer/distributor registers their own OAuth application and deploys their own exchange backend. Generic builds intentionally contain no shared provider. A live end-to-end test must use that developer’s integration. Automated HTTP and browser-flow tests use controlled fakes; they are not evidence of live authorization.
 
 ## Technician workflow
 
@@ -13,19 +13,33 @@ Implementation checked against official Supabase sources on 2026-10-22. Publishe
 
 Passwords are handled by project Auth, not an IP-address table. The directory binds the authenticated, verified account to its email and instance. Actual IP/port data updates from WebRTC candidates during a connection; it can be empty before negotiation and is not a permanent network address.
 
-## One-time publisher activation
+## One-time setup for each developer
 
-The Supabase developer MCP connector does not register organization-level Management API OAuth applications. Use the Supabase Dashboard's organization **OAuth Apps** screen to register **Galaxy Control**. This is a publisher action, not something each technician must repeat.
+Fork or clone this repository. Do not reuse the original author's OAuth application, backend, credentials or Supabase project. Technicians using your configured distribution authorize **your** integration; they do not register another OAuth application themselves.
 
-- Choose the fixed HTTPS URL for the `connect-supabase` exchange function before registration.
-- Register its exact `<broker-root>/callback` URL as the OAuth redirect.
-- Request only Projects Read, Database Write, Auth Write, Rest Write and Secrets Write. These permit discovering the named project, installing the schema, configuring Auth/Data API and creating a publishable key. Do not request project creation, billing, Storage or Edge Function permissions for technician authorization.
-- Deploy `functions/connect-supabase/index.ts` and `handler.mjs` as a setup-only Edge Function. The OAuth callback must be reachable without a project Auth JWT; the function enforces signed state and PKCE instead. Configure gateway JWT verification accordingly for this function only.
-- Set `GALAXY_SUPABASE_CLIENT_ID`, `GALAXY_SUPABASE_CLIENT_SECRET` and `GALAXY_SUPABASE_BROKER_URL` in that function's server-side environment. The app secret must never go into the EXE, Git repository or customer package.
-- Populate the release's `setup-provider.json` with the broker's **public HTTPS root URL**. The checked-in generic file remains empty until a real integration is activated; a missing provider is reported accurately in the UI.
-- Test using a real authorized owner, a dedicated project and the native app. Check wrong-account, denied-consent, cancellation, multiple-project, existing-project, email-confirmation and export behavior before merging/publishing the feature.
+1. In your own Supabase organization, register a Management API OAuth application under **OAuth Apps**. Choose your own HTTPS exchange endpoint first and register its exact `<broker-root>/callback` redirect URL.
+2. Request only Projects Read, Database Write, Auth Write, Rest Write and Secrets Write. These allow project discovery, schema installation, Auth/Data API configuration and publishable-key creation. Project creation, billing, Storage and Edge Function permissions are unnecessary for technician authorization.
+3. Deploy the included `supabase/functions/connect-supabase` function to your own backend. The checked-in `supabase/config.toml` disables gateway JWT verification for this function only: signed state and PKCE protect the OAuth flow instead. Link the Supabase CLI to your own backend project before deployment.
+4. Copy `supabase/functions/connect-supabase/.env.example` to `.env` in that directory. Set your OAuth client ID, client secret and public broker root URL. Store these as server-side function secrets and deploy the function. Real `.env` files are Git-ignored. Never put the client secret in desktop configuration, the EXE, GitHub or customer packages.
 
-This branch intentionally does not replace the stable public release while publisher activation is pending.
+For a Supabase Edge Function backend, run from the repository root after installing and authenticating the Supabase CLI:
+
+```bash
+supabase link --project-ref YOUR_BACKEND_PROJECT_REF
+supabase secrets set --env-file supabase/functions/connect-supabase/.env
+supabase functions deploy connect-supabase
+python scripts/configure-provider.py https://YOUR-BACKEND-PROJECT.supabase.co/functions/v1/connect-supabase/
+```
+
+The helper creates ignored `src/GalaxyControl/setup-provider.local.json` containing **only your public broker URL**. The checked-in `setup-provider.json` stays blank. Build your configured Windows distribution:
+
+```powershell
+dotnet publish src/GalaxyControl -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o artifacts/windows
+```
+
+The output is named `setup-provider.json`; ship it with the executable. No OAuth credentials are copied into the build. Generic GitHub builds reject any shared provider and remain unconfigured by design. Each fork follows these same steps independently; no activation of the original author's account is needed.
+
+Before distributing your configured build, test your deployed OAuth flow with an authorized owner and a dedicated **Galaxy Control** project. Check denied consent, cancellation, multiple projects, existing installations, email confirmation and customer export. Automated tests use controlled endpoints and do not claim a live hosted OAuth test.
 
 ## Authorization boundary
 

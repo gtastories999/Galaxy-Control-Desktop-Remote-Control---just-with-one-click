@@ -6,3 +6,7 @@ artifacts/
 .env
 node_modules/
 connection.local.json
+
+# Per-distributor OAuth endpoint and server credentials
+setup-provider.local.json
+*.env

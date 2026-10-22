@@ -38,6 +38,25 @@ jobs:
           if ($config.SupabaseUrl -ne 'https://YOUR-PROJECT.supabase.co') { throw 'Public build contains an operator project URL.' }
           if ($config.SupabasePublishableKey -ne 'YOUR_SUPABASE_PUBLISHABLE_KEY') { throw 'Public build contains an operator API key.' }
           if (Test-Path artifacts/windows/connection.local.json) { throw 'Local configuration was included in the public artifact.' }
+          $provider = Get-Content artifacts/windows/setup-provider.json -Raw | ConvertFrom-Json
+          if ($provider.BrokerUrl -ne '') { throw 'Generic build must not use any developer OAuth backend.' }
+          if (@($provider.PSObject.Properties).Count -ne 1) { throw 'Provider config may contain only its public broker URL.' }
+          if (Test-Path artifacts/windows/setup-provider.local.json) { throw 'Private distributor configuration was included.' }
+      - name: Verify independent developer build configuration
+        shell: pwsh
+        run: |
+          $localProvider = 'src/GalaxyControl/setup-provider.local.json'
+          try {
+            '{"BrokerUrl":"https://publisher.example.invalid/oauth/"}' | Set-Content $localProvider
+            dotnet publish src/GalaxyControl -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o artifacts/provider-check
+            if ($LASTEXITCODE -ne 0) { throw 'Developer build failed.' }
+            $configured = Get-Content artifacts/provider-check/setup-provider.json -Raw | ConvertFrom-Json
+            if ($configured.BrokerUrl -ne 'https://publisher.example.invalid/oauth/') { throw 'Developer endpoint was not applied.' }
+            if (@($configured.PSObject.Properties).Count -ne 1) { throw 'Only a public broker URL may be shipped.' }
+            if (Test-Path artifacts/provider-check/setup-provider.local.json) { throw 'Local source filename leaked into output.' }
+          } finally {
+            Remove-Item $localProvider -ErrorAction SilentlyContinue
+          }
       - name: Ensure WebView2 Runtime
         shell: pwsh
         run: |
@@ -87,4 +106,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh release create "windows-${{ github.run_number }}" Galaxy-Control-Windows-x64.zip --target "${{ github.sha }}" --title "Galaxy Control - Windows UI fixes" --notes "Fixes the missing role selector and square button backgrounds. Includes a rendered 3D gold logo, rounded input fields and role-specific help text. Windows UI snapshots, WebView2 P2P transport, directory and database tests pass before publication. This public build contains configuration placeholders: retain your existing connection.json when updating, or configure your own Supabase project using the repository guide." --latest
+          gh release create "windows-${{ github.run_number }}" Galaxy-Control-Windows-x64.zip --target "${{ github.sha }}" --title "Galaxy Control - Independent Supabase OAuth setup" --notes "Adds Connect Supabase and automatic project configuration for independently configured distributions. Every developer must register their own OAuth application and deploy their own exchange backend; this generic download contains no shared OAuth provider, project or credentials. See supabase/ACCOUNT-CONNECTION.md for the developer setup guide. Existing public connection settings continue to work. Automated provisioning, OAuth, Windows UI, direct P2P and WebView2 tests run before release; a live OAuth setup requires the developer's own integration." --latest

@@ -1,0 +1,7 @@
+# Local identifier, not a shared cloud project or a remote project reference.
+project_id = "galaxy-control-setup"
+
+# OAuth callbacks cannot carry a Supabase project-user JWT.
+# Signed expiring state + PKCE are checked by this setup-only function.
+[functions.connect-supabase]
+verify_jwt = false

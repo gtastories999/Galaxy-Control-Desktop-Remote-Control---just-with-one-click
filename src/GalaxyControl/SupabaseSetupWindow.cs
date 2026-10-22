@@ -45,9 +45,9 @@ internal sealed class SupabaseSetupWindow : Form {
         try{
             if(provisioner is null){
                 var providerPath=Path.Combine(AppContext.BaseDirectory,"setup-provider.json");
-                if(!File.Exists(providerPath))throw new InvalidOperationException("This build's publisher has not activated Supabase account connection yet.");
+                if(!File.Exists(providerPath))throw new InvalidOperationException("This distribution's developer must configure their own Supabase OAuth connection first.");
                 using var config=JsonDocument.Parse(File.ReadAllText(providerPath));
-                if(!Uri.TryCreate(config.RootElement.GetProperty("BrokerUrl").GetString(),UriKind.Absolute,out var broker))throw new InvalidOperationException("Supabase account connection still needs the publisher's one-time OAuth registration. Your existing app configuration is unchanged.");
+                if(!Uri.TryCreate(config.RootElement.GetProperty("BrokerUrl").GetString(),UriKind.Absolute,out var broker))throw new InvalidOperationException("This generic build has no shared OAuth provider. Its developer must register their own Supabase OAuth app and configure their own backend.");
                 Report("Sign in to Supabase in your browser and authorize Galaxy Control…");
                 var accountToken=await SupabaseAccountLink.Connect(broker,SupabaseAccountLink.OpenBrowser,lifetime.Token);
                 provisioner=new SupabaseProvisioner(accountToken);accountToken="";
