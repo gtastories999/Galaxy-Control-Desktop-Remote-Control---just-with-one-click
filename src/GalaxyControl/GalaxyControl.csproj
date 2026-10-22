@@ -11,6 +11,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
     <EmbeddedResource Include="Transport/*.js" />
+    <EmbeddedResource Include="../../supabase/schema.sql" LogicalName="GalaxyControl.Setup.schema.sql" />
+    <None Update="setup-provider.json" CopyToOutputDirectory="PreserveNewest" />
     <EmbeddedResource Include="Assets/galaxy-logo.png" LogicalName="GalaxyControl.Assets.galaxy-logo.png" />
     <None Include="../../LICENSE" Link="LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../licenses/*.txt" Link="licenses/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

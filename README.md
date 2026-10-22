@@ -4,7 +4,7 @@ Minimal, attended Windows remote support: **enter the technician's email → con
 
 ## How it works
 
-1. The technician chooses **I'm a technician**, enters their verified email and Supabase account password, and goes online. Their app registers that email in the operator's Supabase database.
+1. The technician chooses **I'm a technician**, enters their verified email and technician account password, and goes online. Their app registers that email in the operator's Supabase database.
 2. The customer opens the app, enters only that email and clicks **Connect to technician**. IP addresses and ports are handled in the background; no customer registration screen is shown.
 3. The technician accepts. The apps exchange session-specific WebRTC addresses through Supabase and establish **direct, encrypted P2P** screen and control channels. Supabase updates the technician's email/IP/port mapping as actual ICE endpoints are gathered.
 4. **Stop sharing**, closing either app or a connection failure ends control and releases held keys. There is no unattended access or automatic reconnection.
@@ -17,6 +17,12 @@ Minimal, attended Windows remote support: **enter the technician's email → con
 | TURN/media relay | Not included | Never |
 
 A plain IP/port row does not remove NAT restrictions. Actual session candidates are exchanged automatically. Networks requiring a relay fail clearly; Galaxy Control does not fall back to server-based media transport.
+
+## Automatic account setup (publisher activation pending)
+
+The technician view includes **Connect Supabase**. After the publisher registers and activates its Supabase OAuth integration, the technician creates a dedicated project named **Galaxy Control**, enters technician credentials, and authorizes the app in their browser. Galaxy Control configures the private directory, permissions, Auth and public configuration automatically. It preserves email confirmation, does not store passwords or owner tokens, and offers **Export customer app** with only public configuration.
+
+The OAuth integration is not registered or live in this branch. The button explicitly reports that publisher activation is required; it does not silently substitute manual token entry. See [publisher activation and verification](supabase/ACCOUNT-CONNECTION.md). Each technician uses their own project; the small setup-only OAuth exchange service never receives desktop/control data.
 
 ## Own Supabase required
 

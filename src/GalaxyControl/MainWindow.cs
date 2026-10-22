@@ -99,6 +99,7 @@ internal sealed class MainWindow : Form {
     readonly TextBox email=new(), token=new(){UseSystemPasswordChar=true};
     readonly ComboBox mode=new(){DropDownStyle=ComboBoxStyle.DropDownList};
     readonly Label status=new(){AutoSize=false};
+    readonly RoundedButton supabaseSetup=new(){Text="Connect Supabase",Visible=false};
     readonly GoldButton connect=new(){Text="Connect to technician"};
     readonly RoundedButton stop=new(){Text="Stop sharing",Enabled=false}, accept=new(){Text="Accept support request",Visible=false};
     readonly PictureBox screen=new(){Dock=DockStyle.Fill,SizeMode=PictureBoxSizeMode.Zoom,BackColor=Color.FromArgb(24,26,32),TabStop=true};
@@ -145,10 +146,12 @@ internal sealed class MainWindow : Form {
         title.Name="modeTitle";subtitle.Name="modeSubtitle";emailLabel.Name="emailLabel";consent.Name="modeHint";
         connect.Name="connectButton";stop.Name="stopButton";accept.Name="acceptButton";connect.TabIndex=3;stop.TabIndex=4;accept.TabIndex=5;
         connect.SetBounds(30,390,480,54);stop.SetBounds(30,458,232,44);accept.SetBounds(274,458,236,44);
-        card.Controls.AddRange([connect,stop,accept]);
+        supabaseSetup.Name="supabaseSetupButton";supabaseSetup.TabIndex=6;supabaseSetup.SetBounds(274,458,236,44);
+        card.Controls.AddRange([connect,stop,accept,supabaseSetup]);
+        supabaseSetup.Click+=(_,_)=>{using var setup=new SupabaseSetupWindow(email.Text,token.Text);setup.ShowDialog(this);if(setup.Configured){email.Text=setup.TechnicianEmail;token.Text=setup.TechnicianPassword;status.Text="Supabase configured. Confirm your email if needed, then sign in.";}};
         status.Name="connectionStatus";status.AccessibleName="Connection status";status.SetBounds(58,678,484,38);status.ForeColor=Color.FromArgb(106,113,104);status.Font=new Font("Segoe UI",9);status.Text="Ready when you are. You stay in control.";Controls.Add(status);
         void UpdateMode() {
-            bool tech=mode.SelectedIndex==1;token.Parent!.Visible=tech;
+            bool tech=mode.SelectedIndex==1;token.Parent!.Visible=tech;supabaseSetup.Visible=tech&&!busy;
             title.Text=tech?"Your support desk.":"Good help starts here.";
             subtitle.Text=tech?"Sign in to receive and accept support requests.":"Your technician is just one connection away.";
             emailLabel.Text=tech?"Your technician email":"Technician email";
@@ -213,11 +216,11 @@ internal sealed class MainWindow : Form {
         technician=mode.SelectedIndex==1;
         if(technician&&string.IsNullOrWhiteSpace(token.Text)){status.Text="Enter your technician password.";return;}
         try {
-            using var config=JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory,"connection.json")));
+            using var config=JsonDocument.Parse(File.ReadAllText(ConnectionStore.CurrentPath));
             stunUrls=config.RootElement.GetProperty("StunUrls").EnumerateArray().Select(value=>value.GetString()??"").ToArray();
             if(stunUrls.Length>4 || stunUrls.Any(url=>!System.Text.RegularExpressions.Regex.IsMatch(url,@"^stun:[a-zA-Z0-9.-]+(?::\d+)?$")))
                 throw new InvalidOperationException("Only STUN discovery servers are allowed. TURN relays are disabled.");
-            busy=true;lifetime=new CancellationTokenSource(TimeSpan.FromHours(1));
+            busy=true;supabaseSetup.Visible=false;lifetime=new CancellationTokenSource(TimeSpan.FromHours(1));
             sessionId=Guid.NewGuid().ToString("N");
             connect.Enabled=false;mode.Enabled=false;email.Enabled=false;token.Enabled=false;stop.Enabled=true;status.Text="Preparing secure P2P transport…";
             peer=new PeerBridge();
@@ -323,7 +326,7 @@ internal sealed class MainWindow : Form {
         NativeInput.ReleaseAll();
         var old=viewer;viewer=null;if(old is not null){old.Controls.Remove(screen);old.Close();old.Dispose();}
         screen.Image?.Dispose();screen.Image=null;
-        connect.Enabled=!busy;mode.Enabled=true;email.Enabled=true;token.Enabled=true;stop.Enabled=false;accept.Visible=false;
+        supabaseSetup.Visible=mode.SelectedIndex==1&&!busy;connect.Enabled=!busy;mode.Enabled=true;email.Enabled=true;token.Enabled=true;stop.Enabled=false;accept.Visible=false;
         BackColor=Color.FromArgb(250,250,247);if(updateStatus)status.Text="Session ended. Your computer is no longer shared.";
     }
 }

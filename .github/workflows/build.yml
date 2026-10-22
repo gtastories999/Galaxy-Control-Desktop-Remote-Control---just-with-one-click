@@ -12,11 +12,13 @@ jobs:
         with:
           dotnet-version: '8.0.x'
       - run: dotnet run --project tests/DirectoryClient -c Release
+      - run: dotnet run --project tests/Provisioning -c Release
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - run: npm ci
       - run: npm run test:setup
+      - run: node tests/account-broker.cjs
       - run: npm run test:database
       - run: npx playwright install --with-deps chromium
       - run: npm test
