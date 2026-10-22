@@ -9,7 +9,9 @@ internal class RoundedButton : Button {
     public bool Gold { get; set; }
     public RoundedButton() {
         FlatStyle=FlatStyle.Flat; FlatAppearance.BorderSize=0; Cursor=Cursors.Hand;
-        UseVisualStyleBackColor=false; BackColor=Color.White;
+        UseVisualStyleBackColor=false;
+        SetStyle(ControlStyles.SupportsTransparentBackColor,true);BackColor=Color.Transparent;
+        FlatAppearance.MouseOverBackColor=Color.Transparent;FlatAppearance.MouseDownBackColor=Color.Transparent;
         Font=new Font("Segoe UI",10,FontStyle.Bold);
         SetStyle(ControlStyles.UserPaint|ControlStyles.AllPaintingInWmPaint|ControlStyles.OptimizedDoubleBuffer,true);
     }
@@ -25,7 +27,7 @@ internal class RoundedButton : Button {
         var previous=Region;Region=new Region(outline);previous?.Dispose();
     }
     protected override void OnPaintBackground(PaintEventArgs e) {
-        e.Graphics.Clear(Parent?.BackColor??Color.White);
+        base.OnPaintBackground(e);
     }
     protected override void OnMouseEnter(EventArgs e){Hovered=true;Invalidate();base.OnMouseEnter(e);}
     protected override void OnMouseLeave(EventArgs e){Hovered=false;Invalidate();base.OnMouseLeave(e);}
@@ -36,7 +38,12 @@ internal class RoundedButton : Button {
             !Enabled?Color.FromArgb(239,239,235):Gold?Color.FromArgb(255,231,119):Hovered?Color.FromArgb(247,245,236):Color.White,
             !Enabled?Color.FromArgb(232,232,227):Gold?Color.FromArgb(232,178,47):Color.FromArgb(250,250,247),35);
         g.FillPath(fill,path);using var border=new Pen(Gold?Color.FromArgb(223,177,57):Color.FromArgb(224,226,221));g.DrawPath(border,path);
-        TextRenderer.DrawText(g,Text,Font,ClientRectangle,Enabled?Color.FromArgb(44,40,28):Color.FromArgb(143,144,136),TextFormatFlags.HorizontalCenter|TextFormatFlags.VerticalCenter);
+        // Use the same alpha-aware renderer for the label and button surface.
+        // GDI text drawing can ignore the managed clip on rounded, buffered controls.
+        g.TextRenderingHint=System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+        using var textBrush=new SolidBrush(Enabled?Color.FromArgb(44,40,28):Color.FromArgb(143,144,136));
+        using var format=new StringFormat {Alignment=StringAlignment.Center,LineAlignment=StringAlignment.Center,HotkeyPrefix=System.Drawing.Text.HotkeyPrefix.Show};
+        g.DrawString(Text,Font,textBrush,ClientRectangle,format);
         if(Focused){using var focus=new Pen(Color.FromArgb(135,101,24));focus.DashStyle=DashStyle.Dot;using var inner=Shape(new RectangleF(5,5,Width-11,Height-11),10);g.DrawPath(focus,inner);}
     }
 }
