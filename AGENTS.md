@@ -5,3 +5,5 @@ Use each operator's own Supabase project. Never include real project URLs, keys,
 Never distribute secret or service-role keys; use only a publishable key plus end-user Supabase Auth tokens.
 Verify the PostgreSQL permissions and directory schema, Supabase HTTP client, direct-only browser transport, actual Windows WebView2 bridge and Windows publish before release.
 Never add TURN or screen/input forwarding to Supabase. Only directory metadata, SDP and ICE may be stored or exchanged there.
+
+Each distributor or fork must register its own Supabase Management API OAuth application and deploy its own account-exchange backend. Never default forks or public generic builds to the original author's OAuth application or broker. Keep setup-provider.json empty in generic builds and setup-provider.local.json ignored. OAuth client secrets stay exclusively in each developer's server environment; only the public broker URL may enter that developer's configured build.
