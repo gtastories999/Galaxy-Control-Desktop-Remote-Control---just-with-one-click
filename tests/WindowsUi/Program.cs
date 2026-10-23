@@ -15,6 +15,16 @@ internal static class Program {
                 Require(Descendants(setup).Any(c=>c.Visible&&c.Text=="Connect Supabase"),"Automatic setup must expose the account connection action.");
                 Snapshot(setup,"supabase-account-setup");setup.Close();
             }
+            using(var oauth=(Form)Activator.CreateInstance(Assembly.Load("GalaxyControl").GetType("GalaxyControl.OAuthProviderWindow",true)!)!){
+                oauth.Show();Application.DoEvents();
+                var fields=Descendants(oauth).OfType<TextBox>().ToArray();
+                Require(fields.Count(t=>t.UseSystemPasswordChar)==2,"Bootstrap access token and OAuth client secret must be masked.");
+                Require(fields.Where(t=>t.UseSystemPasswordChar).All(t=>t.Text==""),"Generic OAuth setup must not contain credentials.");
+                var projectField=fields.Single(t=>t.Top==167);projectField.Text="abcdefghijklmnopqrst";Application.DoEvents();
+                Require(fields.Single(t=>t.ReadOnly).Text=="https://abcdefghijklmnopqrst.supabase.co/functions/v1/connect-supabase/callback","OAuth callback must derive from the developer's own project.");
+                Require(Descendants(oauth).Any(c=>c.Visible&&c.Text=="Deploy my OAuth backend"),"Generic Admin setup must expose backend deployment.");
+                Snapshot(oauth,"admin-oauth-bootstrap");oauth.Close();
+            }
             VerifyLoginSetup();
             var assembly=Assembly.Load("GalaxyControl");
             var settings=Activator.CreateInstance(assembly.GetType("GalaxyControl.ConnectionSettings",true)!,new object[]{"https://example.supabase.co","sb_publishable_test_only_not_real",Array.Empty<string>()})!;
