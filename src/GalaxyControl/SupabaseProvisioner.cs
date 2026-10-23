@@ -83,7 +83,7 @@ internal sealed class SupabaseProvisioner : IDisposable {
     public void Dispose(){http.DefaultRequestHeaders.Authorization=null;http.Dispose();}
 }
 internal static class ConnectionStore {
-    public static string LocalPath=>Path.Combine(AppProfile.DirectoryPath,"connection.json");
+    public static string LocalPath=>Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"GalaxyControl","connection.json");
     public static ConnectionSettings Load()=>Load(LocalPath,Path.Combine(AppContext.BaseDirectory,"connection.json"));
     // A configured distribution imports its public settings once. Later generic updates
     // automatically reuse them, even when extracted into a different folder.
@@ -123,26 +123,5 @@ internal static class AccountPreferences {
     public static bool PreferSignIn {
         get {try{return File.Exists(PreferencePath);}catch(Exception e) when(e is IOException or UnauthorizedAccessException){return false;}}
         set {try{var path=PreferencePath;Directory.CreateDirectory(Path.GetDirectoryName(path)!);if(value)File.WriteAllText(path,"sign-in");else File.Delete(path);}catch(Exception e) when(e is IOException or UnauthorizedAccessException){ /* A preference must never block account access. */ }}
-    }
-}
-
-// A reset-test package clears prior local connection settings once before showing the login.
-internal static class AppProfile {
-    public static string DirectoryPath=>Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"GalaxyControl");
-    public static void ResetForFreshPackage(){
-        var marker=Path.Combine(AppContext.BaseDirectory,"fresh-setup.json");
-        if(!File.Exists(marker))return;
-        using var config=JsonDocument.Parse(File.ReadAllText(marker));
-        ResetSettings(DirectoryPath,config.RootElement.GetProperty("ResetId").GetString()??"");
-    }
-    internal static void ResetSettings(string directory,string resetId){
-        if(!Regex.IsMatch(resetId,"^[a-f0-9]{32}$"))throw new InvalidOperationException("The fresh setup reset marker is invalid.");
-        Directory.CreateDirectory(directory);
-        var applied=Path.Combine(directory,"setup-reset-"+resetId+".done");
-        if(File.Exists(applied))return;
-        foreach(var name in new[]{"connection.json","setup-provider.json"})File.Delete(Path.Combine(directory,name));
-        foreach(var preference in Directory.EnumerateFiles(directory,"signin-*.pref"))File.Delete(preference);
-        // Mark success only after the previous settings have actually been removed.
-        File.WriteAllText(applied,"reset-complete");
     }
 }
