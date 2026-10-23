@@ -83,7 +83,7 @@ internal sealed class SupabaseProvisioner : IDisposable {
     public void Dispose(){http.DefaultRequestHeaders.Authorization=null;http.Dispose();}
 }
 internal static class ConnectionStore {
-    public static string LocalPath=>Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"GalaxyControl","connection.json");
+    public static string LocalPath=>Path.Combine(AppProfile.DirectoryPath,"connection.json");
     public static ConnectionSettings Load()=>Load(LocalPath,Path.Combine(AppContext.BaseDirectory,"connection.json"));
     // A configured distribution imports its public settings once. Later generic updates
     // automatically reuse them, even when extracted into a different folder.
@@ -123,5 +123,26 @@ internal static class AccountPreferences {
     public static bool PreferSignIn {
         get {try{return File.Exists(PreferencePath);}catch(Exception e) when(e is IOException or UnauthorizedAccessException){return false;}}
         set {try{var path=PreferencePath;Directory.CreateDirectory(Path.GetDirectoryName(path)!);if(value)File.WriteAllText(path,"sign-in");else File.Delete(path);}catch(Exception e) when(e is IOException or UnauthorizedAccessException){ /* A preference must never block account access. */ }}
+    }
+}
+
+// A fresh-test package uses its own persistent profile and never imports a previous installation.
+internal static class AppProfile {
+    internal static string Resolve(string localData,string? testId){
+        var root=Path.Combine(localData,"GalaxyControl");
+        if(testId is null)return root;
+        if(!Regex.IsMatch(testId,"^[a-f0-9]{32}$"))throw new InvalidOperationException("The fresh setup profile is invalid.");
+        return Path.Combine(root,"SetupTests",testId);
+    }
+    public static string DirectoryPath {
+        get {
+            var marker=Path.Combine(AppContext.BaseDirectory,"fresh-setup.json");
+            string? id=null;
+            if(File.Exists(marker)){
+                using var config=JsonDocument.Parse(File.ReadAllText(marker));
+                id=config.RootElement.GetProperty("ProfileId").GetString()??throw new InvalidOperationException("The fresh setup profile is invalid.");
+            }
+            return Resolve(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),id);
+        }
     }
 }

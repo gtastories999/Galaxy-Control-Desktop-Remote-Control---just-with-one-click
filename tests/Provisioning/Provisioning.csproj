@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework></PropertyGroup>
   <ItemGroup>
+    <Compile Include="../../src/GalaxyControl/OAuthProviderSetup.cs" Link="OAuthProviderSetup.cs" />
     <Compile Include="../../src/GalaxyControl/TechnicianAccount.cs" Link="TechnicianAccount.cs" />
     <Compile Include="../../src/GalaxyControl/SupabaseProvisioner.cs" Link="SupabaseProvisioner.cs" />
     <Compile Include="../../src/GalaxyControl/SupabaseAccountLink.cs" Link="SupabaseAccountLink.cs" />
