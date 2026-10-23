@@ -126,23 +126,23 @@ internal static class AccountPreferences {
     }
 }
 
-// A fresh-test package uses its own persistent profile and never imports a previous installation.
+// A reset-test package clears prior local connection settings once before showing the login.
 internal static class AppProfile {
-    internal static string Resolve(string localData,string? testId){
-        var root=Path.Combine(localData,"GalaxyControl");
-        if(testId is null)return root;
-        if(!Regex.IsMatch(testId,"^[a-f0-9]{32}$"))throw new InvalidOperationException("The fresh setup profile is invalid.");
-        return Path.Combine(root,"SetupTests",testId);
+    public static string DirectoryPath=>Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"GalaxyControl");
+    public static void ResetForFreshPackage(){
+        var marker=Path.Combine(AppContext.BaseDirectory,"fresh-setup.json");
+        if(!File.Exists(marker))return;
+        using var config=JsonDocument.Parse(File.ReadAllText(marker));
+        ResetSettings(DirectoryPath,config.RootElement.GetProperty("ResetId").GetString()??"");
     }
-    public static string DirectoryPath {
-        get {
-            var marker=Path.Combine(AppContext.BaseDirectory,"fresh-setup.json");
-            string? id=null;
-            if(File.Exists(marker)){
-                using var config=JsonDocument.Parse(File.ReadAllText(marker));
-                id=config.RootElement.GetProperty("ProfileId").GetString()??throw new InvalidOperationException("The fresh setup profile is invalid.");
-            }
-            return Resolve(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),id);
-        }
+    internal static void ResetSettings(string directory,string resetId){
+        if(!Regex.IsMatch(resetId,"^[a-f0-9]{32}$"))throw new InvalidOperationException("The fresh setup reset marker is invalid.");
+        Directory.CreateDirectory(directory);
+        var applied=Path.Combine(directory,"setup-reset-"+resetId+".done");
+        if(File.Exists(applied))return;
+        foreach(var name in new[]{"connection.json","setup-provider.json"})File.Delete(Path.Combine(directory,name));
+        foreach(var preference in Directory.EnumerateFiles(directory,"signin-*.pref"))File.Delete(preference);
+        // Mark success only after the previous settings have actually been removed.
+        File.WriteAllText(applied,"reset-complete");
     }
 }

@@ -7,7 +7,17 @@ internal static class OAuthBootstrapTests {
     const string Project="abcdefghijklmnopqrst";
     static void Assert(bool value,string message){if(!value)throw new Exception(message);}
     public static async Task Run(){
-        var id=new string('a',32);Assert(AppProfile.Resolve("/data",null)!=AppProfile.Resolve("/data",id),"Fresh setup must isolate previous settings");
+        var id=new string('a',32);
+        var resetDirectory=Path.Combine(Path.GetTempPath(),Guid.NewGuid().ToString("N"));Directory.CreateDirectory(resetDirectory);
+        try{
+            foreach(var name in new[]{"connection.json","setup-provider.json","signin-old.pref"})File.WriteAllText(Path.Combine(resetDirectory,name),"previous-setting");
+            File.WriteAllText(Path.Combine(resetDirectory,"unrelated.txt"),"keep");
+            AppProfile.ResetSettings(resetDirectory,id);
+            Assert(!File.Exists(Path.Combine(resetDirectory,"connection.json"))&&!File.Exists(Path.Combine(resetDirectory,"setup-provider.json"))&&!File.Exists(Path.Combine(resetDirectory,"signin-old.pref")),"Fresh setup must delete previous connection, OAuth and sign-in settings");
+            Assert(File.Exists(Path.Combine(resetDirectory,"unrelated.txt")),"Reset may remove only connection settings");
+            File.WriteAllText(Path.Combine(resetDirectory,"connection.json"),"new-user-setup");AppProfile.ResetSettings(resetDirectory,id);
+            Assert(File.ReadAllText(Path.Combine(resetDirectory,"connection.json"))=="new-user-setup","A successful fresh setup must survive restart");
+        }finally{Directory.Delete(resetDirectory,true);}
         var path=Path.Combine(Path.GetTempPath(),Guid.NewGuid().ToString("N"),"setup-provider.json");
         try{
             var root=OAuthProviderSetup.BrokerUrl(Project);ProviderSettings.Save(root,path);
@@ -21,7 +31,7 @@ internal static class OAuthBootstrapTests {
                 if(mode is "foreign" or "existing" or "secrets")Assert(management.Writes==0,"Existing or unrelated resources must never be overwritten");
                 if(mode=="ok")Assert(management.Writes==2&&readiness.Checked,"Credentials and deployment must precede a separate readiness check");
             }
-            Console.WriteLine("PASS: fresh-profile isolation, public-only provider persistence, scoped deployment, refusal to overwrite, deployment/readiness failures and credential isolation.");
+            Console.WriteLine("PASS: previous-settings reset, public-only provider persistence, scoped deployment, refusal to overwrite, deployment/readiness failures and credential isolation.");
         }finally{Directory.Delete(Path.GetDirectoryName(path)!,true);}
     }
     sealed class Management(string mode):HttpMessageHandler {

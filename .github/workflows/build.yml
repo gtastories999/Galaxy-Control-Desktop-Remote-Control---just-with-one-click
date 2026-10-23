@@ -88,11 +88,11 @@ jobs:
           name: Galaxy-Control-P2P-Windows-x64
           path: artifacts/windows/
 
-      - name: Package isolated fresh Admin setup test
+      - name: Package fresh Admin setup reset test
         shell: pwsh
         run: |
           Copy-Item artifacts/windows artifacts/fresh-setup -Recurse
-          @{ ProfileId = [guid]::NewGuid().ToString('N') } | ConvertTo-Json | Set-Content artifacts/fresh-setup/fresh-setup.json
+          @{ ResetId = [guid]::NewGuid().ToString('N') } | ConvertTo-Json | Set-Content artifacts/fresh-setup/fresh-setup.json
           $config = Get-Content artifacts/fresh-setup/connection.json -Raw | ConvertFrom-Json
           $provider = Get-Content artifacts/fresh-setup/setup-provider.json -Raw | ConvertFrom-Json
           if ($config.SupabaseUrl -ne 'https://YOUR-PROJECT.supabase.co' -or $provider.BrokerUrl -ne '') { throw 'Fresh test package must be unconfigured.' }
