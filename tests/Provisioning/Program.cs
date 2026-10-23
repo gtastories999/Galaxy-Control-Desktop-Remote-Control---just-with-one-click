@@ -23,6 +23,7 @@ static class Program {
             await Reject(async()=>await api.Configure(Project,"TEST_INSTALL_SQL",_=>{},CancellationToken.None));
             if(mode is "foreign" or "starting" or "partial" or "insecure")Assert(bad.Patches==0&&bad.Keys==0,"Refused installation must not alter account settings or create keys");
         }
+        await VerifyAdminAccount();
         var h=new Exchange();using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(10));Task? browser=null;
         var token=await SupabaseAccountLink.Connect(new Uri("https://broker.example.test/connect/"),uri=>{
             browser=Task.Run(async()=>{
@@ -71,6 +72,28 @@ static class Program {
         transport.EmptySession=true;await Reject(()=>account.Check("tech@example.com","test-password",CancellationToken.None));
         Console.WriteLine("PASS: in-app signup, confirmation resend, project isolation, unconfirmed/wrong-password/rate-limit refusals and verified session checks.");
     }
+    static async Task VerifyAdminAccount(){
+        var transport=new AdminTransport();
+        using var account=new TechnicianAccount(new ConnectionSettings("https://example.supabase.co","sb_publishable_test_only_not_real",[]),transport);
+        await Reject(()=>account.CheckAdmin("admin@example.com","password",CancellationToken.None));
+        transport.Admin=true;await account.CheckAdmin("admin@example.com","password",CancellationToken.None);
+        transport.Revoked=true;await Reject(()=>account.CheckAdmin("admin@example.com","password",CancellationToken.None));
+        Assert(transport.UserChecks==3,"Every admin login must fetch current server-controlled authorization.");
+        var management=new Management();using var provisioner=new SupabaseProvisioner("test-owner-token",management);
+        await provisioner.AssignAdministrator(Project,"Admin@Example.com",CancellationToken.None);
+        Assert(management.AdminAssignments==1,"Admin assignment requires owner Management API authorization.");
+        Console.WriteLine("PASS: admin sign-in rejects editable metadata, checks current server roles, rejects revoked sessions and assigns roles only through owner authorization.");
+    }
+    sealed class AdminTransport:HttpMessageHandler {
+        public bool Admin,Revoked;public int UserChecks;
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken ct){
+            Assert(request.RequestUri!.Host=="example.supabase.co","Admin credentials stay on the selected project.");
+            if(request.Method==HttpMethod.Post)return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK){Content=JsonContent.Create(new {access_token="test-admin-token"})});
+            Assert(request.RequestUri.AbsolutePath=="/auth/v1/user"&&request.Headers.Authorization?.Parameter=="test-admin-token","Admin role must be fetched with the verified session token.");
+            UserChecks++;
+            return Task.FromResult(new HttpResponseMessage(Revoked?HttpStatusCode.Unauthorized:HttpStatusCode.OK){Content=JsonContent.Create(new {app_metadata=new {galaxy_role=Admin?"admin":"technician"},user_metadata=new {galaxy_role="admin"}})});
+        }
+    }
     sealed class AccountTransport:HttpMessageHandler {
         public string Path="",Email="",Error="";public bool SignupType,EmptySession;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken ct){
@@ -85,7 +108,7 @@ static class Program {
         }
     }
     sealed class Management:HttpMessageHandler {
-        public string Mode="";public bool Installed;public int Installs,Keys,Patches;
+        public string Mode="";public bool Installed;public int Installs,Keys,Patches,AdminAssignments;
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage r,CancellationToken ct){
             Assert(r.RequestUri!.Host=="api.supabase.com","Owner authorization must never be sent to the project host");Assert(r.Headers.Authorization?.Parameter=="test-owner-token","Management API needs explicit owner authorization");
             var path=r.RequestUri.AbsolutePath;object result=new {};
@@ -94,6 +117,7 @@ static class Program {
                 var body=await r.Content!.ReadFromJsonAsync<JsonElement>(cancellationToken:ct);var sql=body.GetProperty("query").GetString();
                 if(sql==SupabaseProvisioner.InspectSql)result=new[]{new {installed=Installed,occupied=Mode=="partial"}};
                 else if(sql==SupabaseProvisioner.VerifySql)result=new[]{new {secure=Mode!="insecure"}};
+                else if(sql!.StartsWith("update auth.users")){Assert(sql.Contains("raw_app_meta_data")&&sql.Contains("admin@example.com"),"Admin role must use server metadata and normalized email.");AdminAssignments++;result=new[]{new {id="test-admin-user"}};}
                 else{Assert(sql=="TEST_INSTALL_SQL","Only embedded installation SQL may be sent");Installs++;}
             }else if(r.Method==HttpMethod.Patch){
                 Patches++;var body=await r.Content!.ReadFromJsonAsync<JsonElement>(cancellationToken:ct);

@@ -100,7 +100,9 @@ internal sealed class MainWindow : Form {
     readonly ComboBox mode=new(){DropDownStyle=ComboBoxStyle.DropDownList};
     readonly Label status=new(){AutoSize=false};
     readonly RoundedButton supabaseSetup=new(){Text="Connect Supabase",Visible=false};
-    readonly RoundedButton register=new(){Text="Create technician account",Visible=false};
+    readonly LinkLabel register=new(){Text="Already have an account? Sign In",Visible=false,AutoSize=false,TextAlign=ContentAlignment.MiddleCenter,LinkColor=Color.FromArgb(135,101,24),ActiveLinkColor=Color.FromArgb(200,151,35)};
+    bool signingUp=true,adminSignedIn;
+    Action refreshMode=()=>{};
     readonly GoldButton connect=new(){Text="Connect to technician"};
     readonly RoundedButton stop=new(){Text="Stop sharing",Enabled=false}, accept=new(){Text="Accept support request",Visible=false};
     readonly PictureBox screen=new(){Dock=DockStyle.Fill,SizeMode=PictureBoxSizeMode.Zoom,BackColor=Color.FromArgb(24,26,32),TabStop=true};
@@ -115,7 +117,8 @@ internal sealed class MainWindow : Form {
     Form? viewer;
     long lastMove;
     public MainWindow() {
-        ConnectionStore.TryLoad(out _); // Import a configured distribution automatically, before any update.
+        ConnectionStore.TryLoad(out _);
+        signingUp=!AccountPreferences.PreferSignIn; // Import a configured distribution automatically, before any update.
         AutoScaleDimensions=new SizeF(96,96);AutoScaleMode=AutoScaleMode.Dpi;
         Icon=Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         Text="Galaxy Control"; ClientSize=new Size(600,724);AutoScroll=true;AutoScrollMinSize=ClientSize; FormBorderStyle=FormBorderStyle.FixedSingle; MaximizeBox=false;
@@ -132,7 +135,7 @@ internal sealed class MainWindow : Form {
         var title=Copy("Good help starts here.",27,42,24,true);
         var subtitle=Copy("Your technician is just one connection away.",75,30,11);
         Copy("HOW WOULD YOU LIKE TO CONNECT?",109,24,9,true);
-        mode.Items.AddRange(["Get help","I'm a technician"]);mode.SelectedIndex=0;mode.SetBounds(30,140,480,34);mode.Font=new Font("Segoe UI",11);
+        mode.Items.AddRange(["Get Help","I'm a technician","Admin"]);mode.SelectedIndex=0;mode.SetBounds(30,140,480,34);mode.Font=new Font("Segoe UI",11);
         mode.Name="connectionMode";mode.AccessibleName="Connection mode";mode.TabIndex=0;mode.IntegralHeight=false;mode.DropDownHeight=100;
         card.Controls.Add(mode);
         var emailLabel=Copy("Technician email",184,24,10,true);
@@ -148,27 +151,32 @@ internal sealed class MainWindow : Form {
         title.Name="modeTitle";subtitle.Name="modeSubtitle";emailLabel.Name="emailLabel";consent.Name="modeHint";
         connect.Name="connectButton";stop.Name="stopButton";accept.Name="acceptButton";connect.TabIndex=3;stop.TabIndex=4;accept.TabIndex=5;
         connect.SetBounds(30,390,480,54);stop.SetBounds(30,458,232,44);accept.SetBounds(274,458,236,44);
-        supabaseSetup.Name="supabaseSetupButton";supabaseSetup.TabIndex=6;supabaseSetup.SetBounds(274,458,236,44);
-        register.Name="registerButton";register.TabIndex=7;register.SetBounds(30,458,232,44);
+        supabaseSetup.Name="supabaseSetupButton";supabaseSetup.TabIndex=6;supabaseSetup.SetBounds(30,342,480,42);
+        register.Name="registerButton";register.TabIndex=7;register.SetBounds(30,458,480,34);
         card.Controls.AddRange([connect,stop,accept,supabaseSetup,register]);
-        register.Click+=async(_,_)=>await RegisterTechnician();
+        register.LinkClicked+=(_,_)=>{signingUp=!signingUp;AccountPreferences.PreferSignIn=!signingUp;UpdateMode();};
         supabaseSetup.Click+=async(_,_)=>await SetUpSupabase();
         status.Name="connectionStatus";status.AccessibleName="Connection status";status.SetBounds(58,678,484,38);status.ForeColor=Color.FromArgb(106,106,106);status.Font=new Font("Segoe UI",9);status.Text="Ready when you are. You stay in control.";Controls.Add(status);
         void UpdateMode() {
-            bool tech=mode.SelectedIndex==1;token.Parent!.Visible=tech;supabaseSetup.Visible=tech&&!busy;register.Visible=tech&&!busy;stop.Visible=!tech||busy;
-            title.Text=tech?"Your support desk.":"Good help starts here.";
-            subtitle.Text=tech?"Sign in to receive and accept support requests.":"Your technician is just one connection away.";
-            emailLabel.Text=tech?"Your technician email":"Technician email";
-            email.PlaceholderText=tech?"you@example.com":"technician@example.com";
+            bool tech=mode.SelectedIndex==1,admin=mode.SelectedIndex==2;
+            token.Parent!.Visible=tech||admin;supabaseSetup.Visible=admin&&!busy;
+            register.Visible=tech&&!busy;stop.Visible=busy||(!tech&&!admin)||adminSignedIn&&admin;
+            title.Text=admin?"Your installation.":tech?"Your support desk.":"Good help starts here.";
+            subtitle.Text=admin?"Connect your project and sign in as an administrator.":tech?"Sign up or sign in to receive support requests.":"Your technician is just one connection away.";
+            emailLabel.Text=admin?"Admin email":tech?"Your email":"Technician email";
+            email.PlaceholderText=tech||admin?"you@example.com":"technician@example.com";
             var layoutScale=email.Parent!.Height/50f;
-            consent.Top=(tech?token.Parent!.Bottom:email.Parent.Bottom)+(int)Math.Round((tech?12:26)*layoutScale);
-            consent.Height=(int)Math.Round((tech?48:72)*layoutScale);
-            consent.Text=tech?"Sign in with your verified technician account. You choose which support requests to accept.":"Your technician can view your screen and control your mouse and keyboard. You can stop sharing at any time.";
-            connect.Text=tech?"Sign in & go online":"Connect to technician";
-            stop.Text=tech?"Go offline":"Stop sharing";
-            if(!busy)status.Text=tech?"Sign in or create your account here. Your project connection is saved automatically.":"Ready when you are. You stay in control.";
+            consent.Top=((tech||admin)?token.Parent!.Bottom:email.Parent.Bottom)+(int)Math.Round((tech||admin?12:26)*layoutScale);
+            consent.Height=(int)Math.Round((admin?0:tech?48:72)*layoutScale);consent.Visible=!admin;
+            consent.Text=tech?(signingUp?"Create your account, confirm your email, then go online.":"Sign in with your verified account. You choose which support requests to accept."):"Your technician can view your screen and control your mouse and keyboard. You can stop sharing at any time.";
+            connect.Text=admin?"Sign In":tech?(signingUp?"Sign Up":"Sign In"):"Connect to technician";
+            connect.Enabled=!busy&&!(admin&&adminSignedIn);
+            register.Text=signingUp?"Already have an account? Sign In":"New here? Sign Up";
+            stop.Text=admin?"Sign Out":tech?"Go offline":"Stop sharing";
+            stop.Enabled=busy||admin&&adminSignedIn;
+            if(!busy)status.Text=admin?"Connect Supabase to set up your project. Sign In with your admin account.":tech?"Your project connection is saved automatically. No configuration files to copy.":"Ready when you are. You stay in control.";
         }
-        mode.SelectedIndexChanged+=(_,_)=>UpdateMode();UpdateMode();
+        refreshMode=UpdateMode;mode.SelectedIndexChanged+=(_,_)=>{adminSignedIn=false;token.Clear();UpdateMode();};UpdateMode();
         AcceptButton=connect;ActiveControl=email;
         connect.Click+=async(_,_)=>await Connect(); stop.Click+=(_,_)=>Disconnect();
         accept.Click+=async(_,_)=>{
@@ -215,17 +223,30 @@ internal sealed class MainWindow : Form {
         }
     }
     async Task SetUpSupabase(){
-        if(busy)return;
+        if(busy||mode.SelectedIndex!=2)return;
+        adminSignedIn=false;
         using var setup=new SupabaseSetupWindow(email.Text,token.Text);setup.ShowDialog(this);
+        refreshMode();
         if(!setup.Configured)return;
-        email.Text=setup.TechnicianEmail;token.Text=setup.TechnicianPassword;
-        if(setup.AccountReady){await Connect();return;}
+        email.Text=setup.TechnicianEmail;token.Clear();
+        status.Text=setup.AccountReady?"Project connected. Sign In with your admin account.":"Project connected. Confirm your admin email, then Sign In.";
+    }
+    async Task SignInAdmin(){
+        if(busy)return;
+        if(!ConnectionStore.TryLoad(out var settings)){status.Text="Use Connect Supabase above to set up your installation first.";return;}
+        if(!System.Net.Mail.MailAddress.TryCreate(email.Text.Trim(),out _)||string.IsNullOrWhiteSpace(token.Text)){status.Text="Enter your admin email and password.";return;}
+        busy=true;connect.Enabled=false;supabaseSetup.Enabled=false;register.Visible=false;mode.Enabled=false;email.Enabled=false;token.Enabled=false;
         try{
-            var settings=ConnectionStore.Load();
-            using var registration=new TechnicianRegistrationWindow(settings,email.Text,token.Text,true);
-            if(registration.ShowDialog(this)==DialogResult.OK){email.Text=registration.TechnicianEmail;token.Text=registration.TechnicianPassword;await Connect();}
-            else status.Text="Project connected. Confirm your email, then sign in or reopen Create technician account.";
-        }catch(Exception e) when(e is IOException or JsonException or InvalidOperationException){status.Text="Project configuration could not be loaded. Reopen Connect Supabase to retry.";}
+            using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using var account=new TechnicianAccount(settings!);
+            await account.CheckAdmin(email.Text,token.Text,timeout.Token);
+            adminSignedIn=true;token.Clear();
+            status.Text="Signed in as administrator. Use Connect Supabase to manage or export your app.";
+        }catch(Exception e) when(e is HttpRequestException or InvalidOperationException or JsonException or OperationCanceledException){status.Text=e is InvalidOperationException?e.Message:"Admin sign-in unavailable. Please retry.";}
+        finally{
+            busy=false;mode.Enabled=email.Enabled=token.Enabled=supabaseSetup.Enabled=true;
+            var message=status.Text;refreshMode();status.Text=message;
+        }
     }
     async Task RegisterTechnician(bool confirmationPending=false) {
         if(busy)return;
@@ -234,19 +255,21 @@ internal sealed class MainWindow : Form {
             try {
                 settings=ConnectionStore.Load();settings.Validate();
             }catch(Exception e) when(e is IOException or JsonException or InvalidOperationException){
-                await SetUpSupabase();
+                status.Text="This app is not connected to an installation. Ask your administrator for the configured app.";
                 return;
             }
             using var registration=new TechnicianRegistrationWindow(settings,email.Text,token.Text,confirmationPending);
-            if(registration.ShowDialog(this)==DialogResult.OK){email.Text=registration.TechnicianEmail;token.Text=registration.TechnicianPassword;await Connect();}
+            if(registration.ShowDialog(this)==DialogResult.OK){email.Text=registration.TechnicianEmail;token.Text=registration.TechnicianPassword;signingUp=false;AccountPreferences.PreferSignIn=true;refreshMode();await Connect();}
         }catch(Exception e) when(e is HttpRequestException or IOException or JsonException or InvalidOperationException){status.Text="Account setup could not open. Check this distribution's Supabase configuration.";}
     }
     async Task Connect() {
         if(busy)return;
+        if(mode.SelectedIndex==2){await SignInAdmin();return;}
+        if(mode.SelectedIndex==1&&signingUp){await RegisterTechnician();return;}
         if(!System.Net.Mail.MailAddress.TryCreate(email.Text.Trim(),out var address)||address.Address!=email.Text.Trim()){status.Text=mode.SelectedIndex==1?"Please enter your valid technician email.":"Please enter a valid technician email.";return;}
         technician=mode.SelectedIndex==1;
         if(technician&&string.IsNullOrWhiteSpace(token.Text)){status.Text="Enter your technician password.";return;}
-        if(technician&&!ConnectionStore.TryLoad(out _)){await SetUpSupabase();return;}
+        if(technician&&!ConnectionStore.TryLoad(out _)){status.Text="This app is not connected to an installation. Ask your administrator for the configured app.";return;}
         bool offerRegistration=false,confirmationPending=false;
         try {
             var settings=ConnectionStore.Load();
@@ -270,7 +293,7 @@ internal sealed class MainWindow : Form {
             await directory.Run(technician,address.Address.ToLowerInvariant(),token.Text,lifetime.Token);
         } catch(TechnicianAccountException e) when(e.Code is "invalid_credentials" or "email_not_confirmed") {
             confirmationPending=e.Code=="email_not_confirmed";
-            offerRegistration=true;status.Text=confirmationPending?"Waiting for your email confirmation…":"Sign in with an existing account or create your technician account here.";
+            offerRegistration=confirmationPending;status.Text=confirmationPending?"Waiting for your email confirmation…":"Email or password is incorrect. New here? Choose Sign Up.";
         } catch(WebView2RuntimeNotFoundException) {
             status.Text="Microsoft Edge WebView2 Runtime is required. Install it from Microsoft's official WebView2 download page.";
         } catch(Exception e) when(e is HttpRequestException or OperationCanceledException or IOException or JsonException or InvalidOperationException or FormatException or KeyNotFoundException or TimeoutException or System.Runtime.InteropServices.ExternalException or ArgumentException) {
@@ -367,7 +390,8 @@ internal sealed class MainWindow : Form {
         NativeInput.ReleaseAll();
         var old=viewer;viewer=null;if(old is not null){old.Controls.Remove(screen);old.Close();old.Dispose();}
         screen.Image?.Dispose();screen.Image=null;
-        supabaseSetup.Visible=mode.SelectedIndex==1&&!busy;register.Visible=mode.SelectedIndex==1&&!busy;stop.Visible=mode.SelectedIndex!=1||busy;connect.Enabled=!busy;mode.Enabled=true;email.Enabled=true;token.Enabled=true;stop.Enabled=false;accept.Visible=false;
+        adminSignedIn=false;
+        var message=status.Text;refreshMode();status.Text=message;mode.Enabled=true;email.Enabled=true;token.Enabled=true;accept.Visible=false;
         BackColor=Color.FromArgb(250,250,250);if(updateStatus)status.Text="Session ended. Your computer is no longer shared.";
     }
 }

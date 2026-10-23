@@ -21,7 +21,7 @@ internal static class Program {
             foreach(var pending in new[]{false,true}){
                 using var registration=(Form)Activator.CreateInstance(assembly.GetType("GalaxyControl.TechnicianRegistrationWindow",true)!,new object[]{settings,"tech@example.com","",pending})!;
                 registration.Show();Application.DoEvents();
-                Require(Descendants(registration).Any(c=>c.Visible&&c.Text==(pending?"Check confirmation & go online":"Create technician account")),"Registration must expose the action for its current stage.");
+                Require(Descendants(registration).Any(c=>c.Visible&&c.Text==(pending?"Check confirmation & go online":"Sign Up")),"Registration must expose the action for its current stage.");
                 Require(Descendants(registration).Any(c=>c.GetType().Name=="GalaxyLogo"),"Registration must reuse the existing login logo.");
                 Snapshot(registration,pending?"technician-confirmation":"technician-registration");registration.Close();
             }
@@ -31,11 +31,16 @@ internal static class Program {
     static void VerifyLoginSetup(){
         var assembly=Assembly.Load("GalaxyControl");
         using var window=(Form)Activator.CreateInstance(assembly.GetType("GalaxyControl.MainWindow",true)!,true)!;
+        window.GetType().GetField("signingUp",BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(window,true);
         window.Show();Application.DoEvents();
         var controls=Descendants(window).ToArray();
         ((ComboBox)controls.Single(c=>c.Name=="connectionMode")).SelectedIndex=1;
         controls.Single(c=>c.Name=="technicianEmail").Text="tech@example.com";
         controls.Single(c=>c.Name=="technicianPassword").Text="test-password";
+        ((IButtonControl)controls.Single(c=>c.Name=="connectButton")).PerformClick();Application.DoEvents();
+        Require(!Application.OpenForms.Cast<Form>().Any(f=>f.GetType().Name=="SupabaseSetupWindow"),"Technicians must not be routed into developer setup.");
+        Require(controls.Single(c=>c.Name=="connectionStatus").Text.Contains("administrator"),"Missing installation must explain who supplies the configured app.");
+        ((ComboBox)controls.Single(c=>c.Name=="connectionMode")).SelectedIndex=2;
         bool opened=false;
         using var closer=new System.Windows.Forms.Timer{Interval=100};
         closer.Tick+=(_,_)=>{
@@ -43,8 +48,8 @@ internal static class Program {
             if(dialog is null)return;
             opened=true;closer.Stop();Snapshot(dialog,"technician-login-first-run");dialog.Close();
         };
-        closer.Start();((IButtonControl)controls.Single(c=>c.Name=="connectButton")).PerformClick();Application.DoEvents();
-        Require(opened,"A technician's first login must open in-app project setup instead of asking for configuration files.");
+        closer.Start();((IButtonControl)controls.Single(c=>c.Name=="supabaseSetupButton")).PerformClick();Application.DoEvents();
+        Require(opened,"Only the Admin setup action must open in-app project setup.");
         Require(controls.Single(c=>c.Name=="connectButton").Enabled,"Cancelling setup must leave sign-in usable.");
         window.Close();
     }
@@ -60,12 +65,13 @@ internal static class Program {
             foreach(var control in Descendants(window).ToArray())control.Font=new Font(control.Font.FontFamily,control.Font.Size*scale,control.Font.Style);
             window.Scale(new SizeF(scale,scale));
         }
-        window.StartPosition=FormStartPosition.Manual;window.Location=new Point(0,0);window.Show();Application.DoEvents();
+        window.StartPosition=FormStartPosition.Manual;window.Location=new Point(0,0);window.GetType().GetField("signingUp",BindingFlags.NonPublic|BindingFlags.Instance)!.SetValue(window,true);
+        window.Show();Application.DoEvents();
         var controls=Descendants(window).ToArray();
         T Find<T>(string name) where T:Control => (T)controls.Single(c=>c.Name==name);
         var mode=Find<ComboBox>("connectionMode");
         Require(mode.Visible&&mode.Enabled&&mode.IsHandleCreated&&mode.Parent is not null,"Connection mode must be attached, visible and selectable.");
-        Require(mode.Items.Count==2,"Both support roles must be available.");
+        Require(mode.Items.Count==3,"Customer, technician and admin roles must be available.");
         Require(mode.Width>=300*scale&&mode.Height>=mode.Font.Height+4,"Role selector must have a usable size.");
         mode.DroppedDown=true;Application.DoEvents();Require(mode.DroppedDown,"Native role dropdown must open.");mode.DroppedDown=false;
         var hint=Find<Label>("modeHint");var password=Find<TextBox>("technicianPassword");var connect=Find<Control>("connectButton");
@@ -75,12 +81,13 @@ internal static class Program {
         Snapshot(window,$"customer-{scale*100:0}");
         mode.SelectedIndex=1;Application.DoEvents();
         Require(password.Visible&&password.UseSystemPasswordChar,"Technician view must expose a masked password.");
-        Require(hint.Text.Contains("verified technician account")&&!hint.Text.Contains("view your screen"),"Technician hint must describe account sign-in, not screen sharing.");
-        Require(Find<Control>("registerButton").Visible,"New technicians must be able to register inside the app.");
-        Require(connect.Text=="Sign in & go online"&&Find<Control>("stopButton").Text=="Go offline","Technician actions must match the role.");
+        Require(hint.Text.Contains("Create your account")&&!hint.Text.Contains("view your screen"),"Technician hint must describe account sign-in, not screen sharing.");
+        Require(Find<LinkLabel>("registerButton").Visible,"Technicians must be able to switch between Sign Up and Sign In.");
+        Require(!Find<Control>("supabaseSetupButton").Visible,"Supabase setup must never appear in the technician view.");
+        Require(connect.Text=="Sign Up"&&Find<Control>("stopButton").Text=="Go offline","Technician actions must match the role.");
         Require(hint.Bottom<=connect.Top,"Role explanation must not overlap the primary action.");
         Require(password.Parent!.Bottom<=hint.Top,$"Password and explanation must not overlap at {scale*100}%. Password bottom={password.Parent.Bottom}, hint top={hint.Top}.");
-        foreach(var button in controls.Where(c=>c is IButtonControl)) {
+        foreach(var button in controls.Where(c=>c is IButtonControl&&c is not LinkLabel)) {
             Require(button is not Button,"Rounded controls must not use the native Windows BUTTON renderer.");
             Require(button.BackColor==Color.Transparent,"Button corners must show the parent surface.");
             using var rendered=new Bitmap(button.Width,button.Height);
@@ -99,6 +106,14 @@ internal static class Program {
         Require(stream is not null,"The 3D logo must be embedded in the application.");
         using var logo=new Bitmap(stream!);Require(Image.IsAlphaPixelFormat(logo.PixelFormat)&&logo.GetPixel(0,0).A==0,"3D logo must have an actual transparent background.");
         Snapshot(window,$"technician-{scale*100:0}");
+        var switchLink=Find<LinkLabel>("registerButton");
+        void SwitchAccountView()=>typeof(LinkLabel).GetMethod("OnLinkClicked",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(switchLink,[new LinkLabelLinkClickedEventArgs(switchLink.Links[0])]);
+        SwitchAccountView();Application.DoEvents();
+        Require(connect.Text=="Sign In"&&switchLink.Text=="New here? Sign Up","Text link must switch to Sign In while keeping one primary button.");
+        Require(!Find<Control>("supabaseSetupButton").Visible,"Switching to Sign In must not expose developer setup.");
+        Snapshot(window,$"technician-sign-in-{scale*100:0}");
+        SwitchAccountView();Application.DoEvents();
+        Require(connect.Text=="Sign Up","Text link must switch back to Sign Up.");
         if(scale==1f){
             var clicks=0;connect.Click+=(_,_)=>clicks++;
             var center=(nint)((connect.Width/2)|((connect.Height/2)<<16));
@@ -108,6 +123,11 @@ internal static class Program {
             SendMessage(connect.Handle,0x0100,(nint)Keys.Space,0);SendMessage(connect.Handle,0x0101,(nint)Keys.Space,0);
             Require(clicks==3,"Space must activate the focused button once.");
         }
+        mode.SelectedIndex=2;Application.DoEvents();
+        Require(Find<Control>("supabaseSetupButton").Visible,"Admin must expose Connect Supabase.");
+        Require(!Find<Control>("registerButton").Visible,"Admin must not expose technician registration.");
+        Require(connect.Text=="Sign In"&&Find<Control>("supabaseSetupButton").Bottom<=connect.Top,"Admin setup must appear above Sign In without overlap.");
+        Snapshot(window,$"admin-{scale*100:0}");
         mode.SelectedIndex=0;Application.DoEvents();Require(!password.Visible,"Switching back to Get help must hide technician credentials.");
         window.Close();
     }

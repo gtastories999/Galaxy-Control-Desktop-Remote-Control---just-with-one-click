@@ -13,3 +13,5 @@ Galaxy is the umbrella brand for all Galaxy projects. Use Gradient Yellow Gold a
 Use the existing gold 3D star-and-orbit logo in src/GalaxyControl/Assets/galaxy-logo.png across login and setup. Do not create a replacement logo or alternate identity.
 
 Technicians must complete onboarding, registration, confirmation and sign-in inside the app. Never instruct technicians to copy configuration files or use a separate HTML setup page. Configured distributions must import and preserve public project settings automatically across updates; the public generic release remains free of operator credentials.
+
+Keep Connect Supabase exclusively in the Admin role, above Admin Sign In. The technician role exposes one Sign Up or Sign In primary action and a text link to switch. Never route technicians into project setup. Admin authorization must use current server-controlled app metadata; never grant admin from UI selection or user-editable metadata.

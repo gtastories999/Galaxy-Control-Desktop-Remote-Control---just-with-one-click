@@ -28,9 +28,9 @@ internal sealed class SupabaseSetupWindow : Form {
         Controls.Add(new Label{Text="Your account. Your project.",Bounds=new Rectangle(100,28,420,42),Font=new Font("Segoe UI",21,FontStyle.Bold)});
         Controls.Add(new Label{Text="Create a Supabase project named Galaxy Control. Then connect your account to set it up automatically.",Bounds=new Rectangle(30,82,490,52),ForeColor=Color.DimGray});
         create.SetBounds(30,142,490,44);Controls.Add(create);
-        Controls.Add(new Label{Text="Technician email",Bounds=new Rectangle(30,204,490,23)});email.Text=initialEmail;email.PlaceholderText="you@example.com";email.SetBounds(30,232,490,32);
-        Controls.Add(new Label{Text="Technician password",Bounds=new Rectangle(30,278,490,23)});password.Text=initialPassword;password.PlaceholderText="Choose a password (10+ characters)";password.SetBounds(30,306,490,32);
-        Controls.Add(new Label{Text="Your Supabase account sign-in opens in your browser. Your technician password is used only with your own project.",Bounds=new Rectangle(30,352,490,48),ForeColor=Color.DimGray});
+        Controls.Add(new Label{Text="Admin email",Bounds=new Rectangle(30,204,490,23)});email.Text=initialEmail;email.PlaceholderText="you@example.com";email.SetBounds(30,232,490,32);
+        Controls.Add(new Label{Text="Admin password",Bounds=new Rectangle(30,278,490,23)});password.Text=initialPassword;password.PlaceholderText="Choose a password (10+ characters)";password.SetBounds(30,306,490,32);
+        Controls.Add(new Label{Text="Your Supabase account sign-in opens in your browser. Your admin password is used only with your own project.",Bounds=new Rectangle(30,352,490,48),ForeColor=Color.DimGray});
         project.SetBounds(30,408,490,32);link.SetBounds(30,456,490,48);progress.SetBounds(30,516,490,5);feedback.SetBounds(30,532,490,61);feedback.ForeColor=Color.DimGray;
         export.SetBounds(30,594,300,34);export.Click+=(_,_)=>ExportCustomer();
         cancel.SetBounds(350,594,170,34);Controls.AddRange([email,password,project,link,progress,feedback,cancel,export]);AcceptButton=link;
@@ -42,7 +42,7 @@ internal sealed class SupabaseSetupWindow : Form {
     void Report(string text){if(disposed||IsDisposed)return;feedback.Text=text;feedback.Refresh();}
     async Task SetUp(){
         if(working)return;
-        if(!MailAddress.TryCreate(TechnicianEmail,out var address)||address.Address!=TechnicianEmail||password.Text.Length<10){Report("Enter your technician email and a password of at least 10 characters.");return;}
+        if(!MailAddress.TryCreate(TechnicianEmail,out var address)||address.Address!=TechnicianEmail||password.Text.Length<10){Report("Enter your admin email and a password of at least 10 characters.");return;}
         working=true;link.Enabled=false;email.Enabled=false;password.Enabled=false;create.Enabled=false;progress.Visible=true;
         try{
             if(provisioner is null){
@@ -64,11 +64,12 @@ internal sealed class SupabaseSetupWindow : Form {
             ConnectionSettings? previous=null;
             ConnectionStore.TryLoad(out previous);
             var settings=await provisioner.Configure(selected.Ref,schema,Report,lifetime.Token,previous);
-            lifetime.Token.ThrowIfCancellationRequested();ConnectionStore.Save(settings);Configured=true;export.Visible=true;cancel.Text="Done";link.Text="Project connected";
-            Report("Preparing your technician account…");
+            lifetime.Token.ThrowIfCancellationRequested();ConnectionStore.Save(settings);link.Text="Project connected";
+            Report("Preparing your admin account…");
             var ready=await TechnicianAccount.Ensure(settings,TechnicianEmail,password.Text,lifetime.Token);
-            AccountReady=ready;
-            Report(ready?"Supabase is connected. Close this window and sign in to go online.":"Project configured. Confirm your technician email, then sign in to Galaxy Control. Your current network address updates when connecting.");
+            await provisioner.AssignAdministrator(selected.Ref,TechnicianEmail,lifetime.Token);
+            AccountReady=ready;Configured=true;export.Visible=true;cancel.Text="Done";
+            Report(ready?"Supabase is connected. Close this window and Sign In as admin.":"Project configured. Confirm your admin email, then Sign In as admin.");
             link.Text="Setup complete";link.Enabled=false;cancel.Text="Done";
             provisioner.Dispose();provisioner=null;
         }catch(OperationCanceledException){Report("Setup was cancelled or timed out. You can safely retry.");}
@@ -88,7 +89,7 @@ internal sealed class SupabaseSetupWindow : Form {
                 }
                 File.Move(temporary,save.FileName,true);
             }finally{if(File.Exists(temporary))File.Delete(temporary);}
-            Report("Customer app exported. Your customer opens the app and enters your technician email.");
+            Report("Customer app exported. Your customer opens the app and enters the technician's email.");
         }catch(Exception e) when(e is IOException or JsonException or InvalidOperationException or UnauthorizedAccessException){Report("The customer app could not be exported. Choose a writable folder and retry.");}
     }
     protected override void Dispose(bool disposing){if(disposing&&!disposed){disposed=true;lifetime.Cancel();lifetime.Dispose();provisioner?.Dispose();}base.Dispose(disposing);}

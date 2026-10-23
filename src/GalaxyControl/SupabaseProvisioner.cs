@@ -73,6 +73,13 @@ internal sealed class SupabaseProvisioner : IDisposable {
         var config=new ConnectionSettings($"https://{projectRef}.supabase.co",key.GetProperty("api_key").GetString()!,["stun:stun.l.google.com:19302"]);
         config.Validate();return config;
     }
+    public async Task AssignAdministrator(string projectRef,string email,CancellationToken ct){
+        if(!Regex.IsMatch(projectRef,"^[a-z0-9]{20}$")||!System.Net.Mail.MailAddress.TryCreate(email,out _))throw new InvalidOperationException("A valid project and admin email are required.");
+        // This request uses only the owner's ephemeral Management API authorization.
+        var literal=email.Trim().ToLowerInvariant().Replace("'","''");
+        var result=await Query(projectRef,$"update auth.users set raw_app_meta_data=coalesce(raw_app_meta_data,'{{}}'::jsonb)||jsonb_build_object('galaxy_role','admin') where lower(email)='{literal}' and is_anonymous is not true returning id",ct);
+        if(result.GetArrayLength()!=1)throw new InvalidOperationException("The admin account could not be assigned. Retry Connect Supabase after checking the account email.");
+    }
     public void Dispose(){http.DefaultRequestHeaders.Authorization=null;http.Dispose();}
 }
 internal static class ConnectionStore {
@@ -101,5 +108,20 @@ internal static class ConnectionStore {
         var staging=path+"."+Guid.NewGuid().ToString("N")+".tmp";
         try{File.WriteAllText(staging,JsonSerializer.Serialize(config,new JsonSerializerOptions{WriteIndented=true}));File.Move(staging,path,true);}
         finally{if(File.Exists(staging))File.Delete(staging);}
+    }
+}
+
+// Stores only an interface preference, scoped to the selected public project.
+internal static class AccountPreferences {
+    static string PreferencePath {
+        get {
+            var project=ConnectionStore.TryLoad(out var settings)?settings!.SupabaseUrl:"unconfigured";
+            var id=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(project)));
+            return Path.Combine(Path.GetDirectoryName(ConnectionStore.LocalPath)!,"signin-"+id+".pref");
+        }
+    }
+    public static bool PreferSignIn {
+        get {try{return File.Exists(PreferencePath);}catch(Exception e) when(e is IOException or UnauthorizedAccessException){return false;}}
+        set {try{var path=PreferencePath;Directory.CreateDirectory(Path.GetDirectoryName(path)!);if(value)File.WriteAllText(path,"sign-in");else File.Delete(path);}catch(Exception e) when(e is IOException or UnauthorizedAccessException){ /* A preference must never block account access. */ }}
     }
 }
