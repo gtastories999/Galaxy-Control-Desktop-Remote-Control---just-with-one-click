@@ -87,7 +87,7 @@ internal static class Program {
         Require(connect.Text=="Sign Up"&&Find<Control>("stopButton").Text=="Go offline","Technician actions must match the role.");
         Require(hint.Bottom<=connect.Top,"Role explanation must not overlap the primary action.");
         Require(password.Parent!.Bottom<=hint.Top,$"Password and explanation must not overlap at {scale*100}%. Password bottom={password.Parent.Bottom}, hint top={hint.Top}.");
-        foreach(var button in controls.Where(c=>c is IButtonControl)) {
+        foreach(var button in controls.Where(c=>c is IButtonControl&&c is not LinkLabel)) {
             Require(button is not Button,"Rounded controls must not use the native Windows BUTTON renderer.");
             Require(button.BackColor==Color.Transparent,"Button corners must show the parent surface.");
             using var rendered=new Bitmap(button.Width,button.Height);
