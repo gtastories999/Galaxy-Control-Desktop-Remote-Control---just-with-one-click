@@ -89,7 +89,7 @@ internal sealed class SupabaseSetupWindow : Form {
                 }
                 File.Move(temporary,save.FileName,true);
             }finally{if(File.Exists(temporary))File.Delete(temporary);}
-            Report("Customer app exported. Your customer opens the app and enters your admin email.");
+            Report("Customer app exported. Your customer opens the app and enters the technician's email.");
         }catch(Exception e) when(e is IOException or JsonException or InvalidOperationException or UnauthorizedAccessException){Report("The customer app could not be exported. Choose a writable folder and retry.");}
     }
     protected override void Dispose(bool disposing){if(disposing&&!disposed){disposed=true;lifetime.Cancel();lifetime.Dispose();provisioner?.Dispose();}base.Dispose(disposing);}

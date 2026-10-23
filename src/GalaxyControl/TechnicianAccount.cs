@@ -32,7 +32,11 @@ internal sealed class TechnicianAccount : IDisposable {
         if(!result.TryGetProperty("access_token",out var token)||string.IsNullOrWhiteSpace(token.GetString()))throw new InvalidOperationException("Sign-in could not be verified. Please try again.");
     }
     public async Task CheckAdmin(string email,string password,CancellationToken ct){
-        var session=await Send("auth/v1/token?grant_type=password",new {email=email.Trim().ToLowerInvariant(),password},ct);
+        JsonElement session;
+        try{session=await Send("auth/v1/token?grant_type=password",new {email=email.Trim().ToLowerInvariant(),password},ct);}
+        catch(TechnicianAccountException e) when(e.Code is "invalid_credentials" or "email_not_confirmed"){
+            throw new InvalidOperationException(e.Code=="email_not_confirmed"?"Confirm your admin email, then Sign In.":"Admin email or password is incorrect.");
+        }
         if(!session.TryGetProperty("access_token",out var token)||string.IsNullOrWhiteSpace(token.GetString()))throw new InvalidOperationException("Admin sign-in could not be verified.");
         using var request=new HttpRequestMessage(HttpMethod.Get,"auth/v1/user");
         request.Headers.Authorization=new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer",token.GetString());
