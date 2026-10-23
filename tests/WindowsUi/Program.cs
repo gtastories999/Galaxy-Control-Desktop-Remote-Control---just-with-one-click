@@ -106,6 +106,14 @@ internal static class Program {
         Require(stream is not null,"The 3D logo must be embedded in the application.");
         using var logo=new Bitmap(stream!);Require(Image.IsAlphaPixelFormat(logo.PixelFormat)&&logo.GetPixel(0,0).A==0,"3D logo must have an actual transparent background.");
         Snapshot(window,$"technician-{scale*100:0}");
+        var switchLink=Find<LinkLabel>("registerButton");
+        void SwitchAccountView()=>typeof(LinkLabel).GetMethod("OnLinkClicked",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(switchLink,[new LinkLabelLinkClickedEventArgs(switchLink.Links[0])]);
+        SwitchAccountView();Application.DoEvents();
+        Require(connect.Text=="Sign In"&&switchLink.Text=="New here? Sign Up","Text link must switch to Sign In while keeping one primary button.");
+        Require(!Find<Control>("supabaseSetupButton").Visible,"Switching to Sign In must not expose developer setup.");
+        Snapshot(window,$"technician-sign-in-{scale*100:0}");
+        SwitchAccountView();Application.DoEvents();
+        Require(connect.Text=="Sign Up","Text link must switch back to Sign Up.");
         if(scale==1f){
             var clicks=0;connect.Click+=(_,_)=>clicks++;
             var center=(nint)((connect.Width/2)|((connect.Height/2)<<16));
