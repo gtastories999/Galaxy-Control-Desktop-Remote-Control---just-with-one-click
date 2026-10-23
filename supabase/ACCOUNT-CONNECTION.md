@@ -76,3 +76,18 @@ Configured distributions expose **Create technician account** directly in techni
 Galaxy is the umbrella brand: use Gradient Yellow Gold for buttons and the existing gold 3D star-and-orbit logo from the login screen throughout onboarding. Generic builds remain free of operator configuration and credentials.
 
 Auth signup and confirmation resend references checked on 2026-10-22: https://supabase.com/docs/reference/javascript/auth-signup and https://supabase.com/docs/reference/javascript/auth-resend. Email confirmation and SMTP delivery remain project prerequisites; no email verification is bypassed.
+
+## Fresh Admin setup in an unconfigured Windows build
+
+In **Admin → Connect Supabase**, an unconfigured build now opens an OAuth setup assistant before requesting the project administrator's email/password:
+
+1. Enter the reference of your own active project named **Galaxy Control**. The assistant displays the exact redirect URL.
+2. Open **Register OAuth app in Supabase**, register your own application in your organization, and use the displayed redirect URL. Supabase requires this registration in its dashboard; its documented Management API does not register OAuth applications.
+3. Return with the application's client ID and client secret. Enter a temporary personal access token with project read, Edge Functions read/write and Secrets read/write permissions for that project.
+4. **Deploy my OAuth backend** verifies that exact project, refuses existing brokers or Galaxy OAuth secrets, stores the OAuth credentials in the server environment, deploys the embedded `connect-supabase` source and checks readiness. Failure may leave server-side credentials or a deployed function; inspect them before retrying. Use **Connect existing backend** after a completed deployment.
+5. Only after a successful readiness check does the app save the public broker URL in the local user profile. The access token and client secret are cleared from the form and never written to desktop settings or exports. The assistant uses a separate HTTP client for readiness checks, without Management API authorization.
+6. Continue with your project admin email/password and browser consent. The ordinary OAuth flow provisions the project and assigns the admin role. A readiness check alone does not verify live consent, callback or the token exchange; test that full flow before distributing your build.
+
+Generic source and Windows downloads contain only the blank checked-in project/provider configuration. They include no publisher's Supabase connection, OAuth backend URL or credentials. There is no reset feature, fresh-test marker or separate profile. Existing user settings retain the standard application's persistence behavior. On a computer that already has a configured Galaxy Control installation, the standard build can reuse those local settings; an unconfigured computer or a new Windows user account gives the same first-run state as a new developer.
+
+Management API multipart deployment and secrets request schemas verified against `https://api.supabase.com/api/v1-json` on 2026-10-23. OAuth registration guide: https://supabase.com/docs/guides/integrations/build-a-supabase-oauth-integration .

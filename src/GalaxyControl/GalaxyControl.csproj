@@ -11,6 +11,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
     <EmbeddedResource Include="Transport/*.js" />
+    <EmbeddedResource Include="../../supabase/functions/connect-supabase/index.ts" LogicalName="GalaxyControl.Setup.broker.index.ts" />
+    <EmbeddedResource Include="../../supabase/functions/connect-supabase/handler.mjs" LogicalName="GalaxyControl.Setup.broker.handler.mjs" />
     <EmbeddedResource Include="../../supabase/schema.sql" LogicalName="GalaxyControl.Setup.schema.sql" />
     <None Update="setup-provider.json" CopyToOutputDirectory="PreserveNewest" Condition="!Exists('setup-provider.local.json')" />
     <None Update="setup-provider.local.json" TargetPath="setup-provider.json" CopyToOutputDirectory="PreserveNewest" Condition="Exists('setup-provider.local.json')" />

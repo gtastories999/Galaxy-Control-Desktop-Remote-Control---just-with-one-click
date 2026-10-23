@@ -9,6 +9,7 @@ static class Program {
     static void Assert(bool value,string message){if(!value)throw new Exception(message);}
     static async Task Reject(Func<Task> action){try{await action();throw new Exception("Expected refusal");}catch(InvalidOperationException){}}
     static async Task Main(){
+        await OAuthBootstrapTests.Run();
         VerifyAutomaticConfiguration();
         await VerifyTechnicianAccount();
         var fake=new Management();using(var api=new SupabaseProvisioner("test-owner-token",fake)){

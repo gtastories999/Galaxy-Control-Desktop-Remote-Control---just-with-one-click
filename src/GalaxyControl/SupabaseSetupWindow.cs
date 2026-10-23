@@ -37,19 +37,25 @@ internal sealed class SupabaseSetupWindow : Form {
         create.Click+=(_,_)=>SupabaseAccountLink.OpenBrowser(new Uri("https://supabase.com/dashboard/new"));
         cancel.Click+=(_,_)=>Close();FormClosing+=(_,_)=>lifetime.Cancel();
         link.Click+=async(_,_)=>await SetUp();
-        feedback.Text="No SQL scripts, project keys or IP addresses to copy.";
+        feedback.Text=ProviderSettings.Load() is null?"First connection opens the Admin OAuth setup assistant.":"Your OAuth backend is configured. Connect your Supabase account to continue.";
     }
     void Report(string text){if(disposed||IsDisposed)return;feedback.Text=text;feedback.Refresh();}
     async Task SetUp(){
         if(working)return;
+        if(ProviderSettings.Load() is null){
+            using var setup=new OAuthProviderWindow();
+            if(setup.ShowDialog(this)!=DialogResult.OK)return;
+        }
         if(!MailAddress.TryCreate(TechnicianEmail,out var address)||address.Address!=TechnicianEmail||password.Text.Length<10){Report("Enter your admin email and a password of at least 10 characters.");return;}
         working=true;link.Enabled=false;email.Enabled=false;password.Enabled=false;create.Enabled=false;progress.Visible=true;
         try{
             if(provisioner is null){
-                var providerPath=Path.Combine(AppContext.BaseDirectory,"setup-provider.json");
-                if(!File.Exists(providerPath))throw new InvalidOperationException("This distribution's developer must configure their own Supabase OAuth connection first.");
-                using var config=JsonDocument.Parse(File.ReadAllText(providerPath));
-                if(!Uri.TryCreate(config.RootElement.GetProperty("BrokerUrl").GetString(),UriKind.Absolute,out var broker))throw new InvalidOperationException("This generic build has no shared OAuth provider. Its developer must register their own Supabase OAuth app and configure their own backend.");
+                var broker=ProviderSettings.Load();
+                if(broker is null){
+                    using var setup=new OAuthProviderWindow();
+                    if(setup.ShowDialog(this)!=DialogResult.OK){Report("Admin OAuth setup is required before connecting your Supabase account.");return;}
+                    broker=ProviderSettings.Load()??throw new InvalidOperationException("Your OAuth backend connection was not saved.");
+                }
                 Report("Sign in to Supabase in your browser and authorize Galaxy Control…");
                 var accountToken=await SupabaseAccountLink.Connect(broker,SupabaseAccountLink.OpenBrowser,lifetime.Token);
                 provisioner=new SupabaseProvisioner(accountToken);accountToken="";
