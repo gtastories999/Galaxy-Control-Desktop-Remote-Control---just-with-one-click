@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace GalaxyControl;
 internal sealed class TechnicianRegistrationWindow : Form {
     readonly TextBox email=new(),password=new(){UseSystemPasswordChar=true};
-    readonly GoldButton create=new(){Text="Create technician account"};
+    readonly GoldButton create=new(){Text="Sign Up"};
     readonly RoundedButton check=new(){Text="Check confirmation & go online",Visible=false},resend=new(){Text="Resend confirmation email",Visible=false};
     readonly Label feedback=new(){AutoSize=false};
     readonly CancellationTokenSource lifetime=new(TimeSpan.FromMinutes(15));

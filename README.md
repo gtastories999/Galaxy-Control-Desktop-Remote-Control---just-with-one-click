@@ -4,7 +4,7 @@ Minimal, attended Windows remote support: **enter the technician's email → con
 
 ## How it works
 
-1. The technician chooses **I'm a technician**. New users click **Create technician account**, register inside the app, confirm the email, and choose **Check confirmation & go online**. Existing users sign in with their verified email and password. Their app registers that email in the operator's Supabase database.
+1. Choose **I'm a technician**. New users see **Sign Up** as the primary action; existing users switch using **Already have an account? Sign In**. Registration, email confirmation and sign-in stay inside the app. The selected sign-in preference is remembered for this installation.
 2. The customer opens the app, enters only that email and clicks **Connect to technician**. IP addresses and ports are handled in the background; no customer registration screen is shown.
 3. The technician accepts. The apps exchange session-specific WebRTC addresses through Supabase and establish **direct, encrypted P2P** screen and control channels. Supabase updates the technician's email/IP/port mapping as actual ICE endpoints are gathered.
 4. **Stop sharing**, closing either app or a connection failure ends control and releases held keys. There is no unattended access or automatic reconnection.
@@ -18,19 +18,25 @@ Minimal, attended Windows remote support: **enter the technician's email → con
 
 A plain IP/port row does not remove NAT restrictions. Actual session candidates are exchanged automatically. Networks requiring a relay fail clearly; Galaxy Control does not fall back to server-based media transport.
 
-## Technician sign-in and updates
+## Roles, sign-in and updates
 
-Technicians use **GalaxyControl.exe** for the entire account workflow. Choose **I'm a technician**, enter email/password and sign in. If the account is new or awaiting email confirmation, the app opens registration or confirmation directly. It checks confirmation automatically while the account window stays open, then continues online. A wrong password never silently creates an account.
+The role selector offers **Get Help**, **I'm a technician** and **Admin**.
 
-A developer-configured download imports and saves its public project connection automatically on first launch. Later updates reuse it even when extracted into a different folder. Technicians do not copy configuration files, edit JSON or open a separate HTML page. If no valid project connection exists, technician sign-in opens **Connect Supabase** in the app.
+- **Get Help:** enter the technician's email and connect.
+- **I'm a technician:** one primary **Sign Up** or **Sign In** action, with a small link to switch. There is no Supabase setup action. A missing project connection asks the technician to obtain the operator's configured app; it never opens developer setup.
+- **Admin:** **Connect Supabase** appears above **Sign In**. No technician registration action appears here. Admin sign-in verifies the current user through the project's Auth server and requires server-controlled `app_metadata.galaxy_role = "admin"`. Editable user metadata never grants administration. Admin sign-in does not start a remote-support session.
 
-## Automatic account setup
+A developer-configured download imports and saves its public project connection automatically. Updates reuse it even from a different folder. Technicians never copy configuration files or use a separate HTML page.
 
-The technician view includes **Connect Supabase**. With a developer-configured distribution, the technician creates a project named **Galaxy Control**, enters technician credentials and authorizes Supabase access in the external browser opened by the app. Galaxy Control installs and verifies its directory schema, permissions, Auth and public configuration. It preserves email confirmation and offers **Export customer app** with public connection settings only. The Supabase owner's login happens in the browser; the technician password belongs to the selected project's Auth service.
+## Administrator project setup
 
-**Every developer/fork registers their own OAuth application and deploys their own exchange backend.** There is no shared author integration. Follow the [developer setup guide](supabase/ACCOUNT-CONNECTION.md), then run `python scripts/configure-provider.py YOUR_HTTPS_BROKER_URL` before building. The helper writes an ignored local configuration containing only the public URL; OAuth secrets stay on your server.
+Choose **Admin → Connect Supabase**. The owner authorizes the distributor's Supabase integration in the external browser, selects a dedicated Galaxy Control project and supplies the installation admin email/password. The app installs and verifies the directory schema and public configuration, creates the account if necessary, and assigns the admin role using the owner's temporary Management API authorization. Email confirmation remains required. Existing installations can repeat this flow to assign their owner account; an ordinary technician signup cannot assign itself an admin role.
 
-Generic GitHub downloads intentionally have no provider configured. Their setup button explains the required developer setup. Technicians using a configured distribution only authorize that distribution's integration and use their own project; they do not register an OAuth application. The exchange backend is used during setup only and never carries remote desktop/control data.
+After confirmation, use **Admin → Sign In**. To create a technician account, switch to **I'm a technician → Sign Up**. Account roles are separate from selecting a UI mode. Project setup always requires Supabase owner authorization, even when accessed without a prior app login; a local UI is not a server authorization boundary.
+
+**Every developer/fork registers their own OAuth application and deploys their own exchange backend.** Follow the [developer setup guide](supabase/ACCOUNT-CONNECTION.md), then run `python scripts/configure-provider.py YOUR_HTTPS_BROKER_URL` before building. OAuth secrets and owner tokens are never distributed or persisted. Generic GitHub downloads have no shared provider or personal project configured. Exported apps contain only public project settings.
+
+Auth role handling checked against the official [Auth user verification](https://supabase.com/docs/reference/javascript/auth-getuser) and [authorization guidance](https://supabase.com/docs/guides/database/postgres/row-level-security) on 2026-10-23. The current changelog introduced no change to this HTTP flow. Contract tests use isolated handlers; they do not claim a live owner authorization or two-PC test.
 
 ## Own Supabase required
 
